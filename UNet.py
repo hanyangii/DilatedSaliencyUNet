@@ -14,12 +14,16 @@ from keras.layers.merge import concatenate
 from keras.losses import mean_squared_error, categorical_crossentropy
 from keras.metrics import categorical_accuracy, binary_accuracy
 
+from UNet_lib import dice_coef
+
 class UNet:
     def __init__(self, input_shape, depth, lr, loss, activation):
         self.network = self.building_net(input_shape, depth, num_class=3, activation=activation)
         self.network.compile(optimizer=Adam(lr=lr), loss=loss, metrics=[categorical_accuracy, dice_coef])
-        
+    
+    def compiled_network(self):
         return self.network
+        
             
     def building_net(self, input_shape, depth, num_class, activation):
         conv = inputs = Input(input_shape, name='input_layer')
@@ -33,7 +37,7 @@ class UNet:
             conv = self.conv_block('relu', 64*(d+1), filter_size, conv, depth_num=str(d)+'_0')
             conv = self.conv_block('relu', 64*(d+1), filter_size, conv, depth_num=str(d)+'_1')
             conv_stack.append(conv)
-            conv = MaxPooling2D(pool_size=(2,2), name='maxpool2d_'str(d))
+            conv = MaxPooling2D(pool_size=(2,2), name='maxpool2d_'+str(d))(conv)
         
         ## Decoding Part
         for d in range(depth, 2*depth+1):
@@ -41,7 +45,7 @@ class UNet:
             conv = Dropout(0.25, name='do_'+str(d))(conv)
             conv = self.conv_block('relu', 64*(d+1), (3,3), conv, depth_num=str(d)+'_1')
             if d == 2*depth: break
-            conv = UpSampling2D(pool_size=(2,2), name='up2d_'+str(d))(conv)
+            conv = UpSampling2D(size=(2,2), name='up2d_'+str(d))(conv)
             conv = concatenate([conv, conv_stack.pop()], axis=-1, name='concat_'+str(d))
         
         ## Fully Connected
@@ -60,6 +64,8 @@ class UNet:
             conv = ReLU(name='relu_'+modal_name+depth_num)(conv)
         else:
             conv = LeakyReLU(alpha=0.5, name='Lrelu_'+modal_name+depth_num)(conv)
+        
+        return conv
             
 
 class Saliency_UNet(UNet):
@@ -110,7 +116,7 @@ class Saliency_UNet(UNet):
     
     def encoder_block(self, inputs, activation, modality, filters, filter_size, depth, dilation=[1,1]):
         
-        depth = modality+'_'str(depth)
+        depth = modality+'_'+str(depth)
         conv = super().conv_block(activation, filters, filter_size, inputs, depth_num = depth+'_0_d'+str(dilation[0]), dilation=dilation[0])
         conv = super().conv_block(activation, filters, filter_size, conv, depth_num = depth+'_1_d'+str(dilation[1]), dilation=dilation[1])
         
@@ -127,7 +133,7 @@ class Saliency_UNet(UNet):
         conv = super().conv_block('relu', filters, filter_size, conv, depth_num=d+'_0')
         conv = Dropout(0.25, name='do_'+d)(conv)
         conv = super().conv_block('relu', filters, filter_size, conv, depth_num=d+'_1')
-        conv = UpSampling2D(pool_size=(2,2), name='up2d_'+d)(conv)
+        conv = UpSampling2D(size=(2,2), name='up2d_'+d)(conv)
         
         return conv
 

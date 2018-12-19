@@ -15,7 +15,6 @@ from keras import backend as K
 
 from keras import layers
 from keras.initializers import RandomNormal, lecun_uniform
-from keras.utils import to_categorical
 from keras.losses import categorical_crossentropy
 
 from tensorflow.python.ops import array_ops
@@ -38,9 +37,13 @@ class Net_Model:
             self.model = Saliency_UNet(input_shape, num_chn, lr, self.loss, self.activation)
             self.net_name ='Saliency_UNet'
         else:
+            input_shape = list(input_shape)
             input_shape[2] = num_chn
+            input_shape = tuple(input_shape)
             self.model = UNet(input_shape, self.layer_level, lr, self.loss, self.activation)
             self.net_name ='UNet_depth'+str(self.layer_level)
+        
+        self.model = self.model.compiled_network()
         
         if VISUALISATION: 
             self.visualise()
@@ -155,17 +158,9 @@ class Net_Model:
         keras.backend.get_session().run(tf.global_variables_initializer())
     
     def train(self, train_data, train_trgt, val_split, epochs, nb_samples, callbacks):
-        
-        if self.activation == 'softmax':
-            train_trgt = to_categorical(train_trgt,num_classes=self.num_class)
-            test_trgt = to_categorical(test_trgt,num_classes=self.num_class)
-        
-        print('\nTRAINING DATASET PERMUTED size: ',np.shape(train_data))
-        print('TRAINING LABEL DATASET PERMUTED size: ',np.shape(train_trgt))
-        print('\nVALIDATION DATASET PERMUTED size: ',np.shape(test_data))
-        print('VALIDATION LABEL DATASET PERMUTED size: ' ,np.shape(test_trgt))
-        
-        self.history_callback = self.model.fit(train_data, train_trgt,
+
+        self.history_callback = self.model.fit(x = train_data, 
+                                        y = train_trgt,
                                         validation_split=val_split,
                                         epochs=epochs,
                                         batch_size=nb_samples,
@@ -208,6 +203,7 @@ class Net_Model:
     
     def save_img_results(self, saving_dir, test_data, test_trgt):
         print('Test data number : ',str(test_data[0].shape[0]),' Slices') 
+        '''
         test_data = np.concatenate(test_data, axis=3)
         test_data_img = []
         test_trgt_img = []
@@ -220,8 +216,9 @@ class Net_Model:
         num_chn = test_data_img.shape[-1]
         data_img = [np.expand_dims(test_data_img[:,:,:,idx], axis=3) for idx in range(num_chn)]
         test_trgt_img = np.array(test_trgt_img)
+        '''
         
-        test_pred_img = self.model.predict(data_img, verbose=1)
+        test_pred_img = self.model.evaluate(test_data, test_trgt, verbose=0)#model.predict(test_data, verbose=1)
         
         chn = ['FLAIR','IAM', 'T1W']
         

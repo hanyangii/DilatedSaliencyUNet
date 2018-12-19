@@ -26,9 +26,13 @@ class TrainConfig(object):
         self.fold = args.fold
         self.batch_size = args.batch_size
         self.VISUALISATION = args.visualisation
+        self.Patch = args.Patch
         self.hist_freq = 10 if self.VISUALISATION else 0
         self.loss = args.loss
+        self.fold = args.fold
         self.n_class = 1
+        self.reduce_lr_factor = args.reduce_lr_factor
+        self.reduce_lr_patience = args.reduce_lr_patience
 
 def set_parser(parser):
     # Arguments for training
@@ -38,17 +42,16 @@ def set_parser(parser):
     parser.add_argument('--num_epochs', type=int, default=80)
     parser.add_argument('--bn_momentum', type=float, default=0.99)
     parser.add_argument('--TRSH', type=float, default=0.0)
-    parser.add_argument('--data_chn_num', type=int, default=1)
+    parser.add_argument('--data_chn_num', type=int, default=3)
     parser.add_argument('--fold', type=int, default=2)
     parser.add_argument('--random_num', type=int, default=500)
     parser.add_argument('--img_size', type=int, default=64)
     parser.add_argument('--batch_norm', dest='batch_norm', action='store_true', default=True)
     parser.add_argument('--no_batch_norm', dest='batch_norm',action='store_false')
-    parser.add_argument('--dir_name', type=str, default='Train')
+    parser.add_argument('--dir_name', type=str, default='')
     parser.add_argument('--gpu_device', type=str, required=True,
                         help='Available GPU number')
     parser.add_argument('--depth', type=int, default=4)
-    parser.add_argument('--dir_name', type=str, default=None)
     parser.add_argument('--reduce_lr_factor', type=float, default=0.2)
     parser.add_argument('--reduce_lr_patience', type=int, default=4)
     parser.add_argument('--loss', type=str, default='crossentropy')

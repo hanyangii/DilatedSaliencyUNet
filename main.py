@@ -29,7 +29,7 @@ K.set_session(sess)
 
 if __name__ == '__main__':
     
-    print_options(vars(args))
+    #print_options(vars(args))
     
     # Parameter Setting
     TRSH          = args.TRSH
@@ -42,8 +42,8 @@ if __name__ == '__main__':
     else:
         img_x, img_y, img_z = args.img_size, args.img_size, 1
 
-    patch_size = str(img_x)'size_chn'+str(num_chn)
-    net_name = args.dir_name+'_'patch_size
+    patch_size = str(img_x)+'size_chn'+str(data_chn_num)
+    net_name = args.dir_name+'_'+patch_size
     
     ''' Load Data '''
     train_config_dir = 'data/com_test_configs_2fold_adni60'
@@ -54,17 +54,17 @@ if __name__ == '__main__':
     win_shape = (img_x, img_y, img_z)
 
     print("Reading TRAIN data..")
-    train_data, train_trgt = generate_patch_data(train_config_dir, b_id, TRSH, win_shape, random_num, num_chn, args.test)    
+    train_data, train_trgt = generate_patch_data(train_config_dir, 0, TRSH, win_shape, random_num, data_chn_num, args.test)    
     
     print("Reading TEST data..")
-    test_data, test_trgt = generate_slice_data(test_config_dir, 1, random_num, num_chn, args.test)
+    test_data, test_trgt = generate_slice_data(test_config_dir, 1, random_num, data_chn_num, args.test)
     
     print(train_data.shape, ' class max val:',np.max(train_trgt))
 
     # Reshape datat to 4-dims
     # Data Order [FLAIR, IAM, T1W]
-    train_data = [np.expand_dims(train_data[:,:,:,i], axis=3) for i in range(num_chn)]
-    test_data = [np.expand_dims(test_data[:,:,:,i], axis=3) for i in range(num_chn)]
+    train_data = [np.expand_dims(train_data[:,:,:,i], axis=3) for i in range(data_chn_num)]
+    test_data = [np.expand_dims(test_data[:,:,:,i], axis=3) for i in range(data_chn_num)]
     
     
     ''' Train Networks'''
@@ -72,52 +72,51 @@ if __name__ == '__main__':
     
     # U-Net (only FLAIR)
     train_dat = [train_data[0], train_trgt]
-    test_dat = [test_data[0], train_trgt]
+    test_dat = [test_data[0], test_trgt]
     train_model(train_config,START_TIME, net_depth=3, SALIENCY=False, DILATION=False, 
-                restore_dir=None, net_name='UNet_depth3_FLAIR', train_dat, test_dat)
+                restore_dir=None, net_type='UNet_depth3_FLAIR', train_dat=train_dat, test_dat=test_dat)
     
     # U-Net (only IAM)
     train_dat = [train_data[1], train_trgt]
-    test_dat = [test_data[1], train_trgt]
+    test_dat = [test_data[1], test_trgt]
     train_model(train_config,START_TIME, net_depth=3, SALIENCY=False, DILATION=False, 
-                restore_dir=None, net_name='IAM', train_dat, test_dat)
+                restore_dir=None, net_type='IAM', train_dat=train_dat, test_dat=test_dat)
     
     # U-Net (FLAIR + IAM)
     train_dat = [train_data[0:2], train_trgt]
-    test_dat = [test_data[0:2], train_trgt]
+    test_dat = [test_data[0:2], test_trgt]
     train_model(train_config,START_TIME, net_depth=3, SALIENCY=False, DILATION=False, 
-                restore_dir=None, net_name='F+I', train_dat, test_dat)
+                restore_dir=None, net_type='F+I', train_dat=train_dat, test_dat=test_dat)
     
     # U-Net (FLAIR + IAM + T1w)
     train_dat = [train_data, train_trgt]
-    test_dat = [test_data, train_trgt]
+    test_dat = [test_data, test_trgt]
     train_model(train_config,START_TIME, net_depth=3, SALIENCY=False, DILATION=False, 
-                restore_dir=None, net_name='All', train_dat, test_dat)
+                restore_dir=None, net_type='All', train_dat=train_dat, test_dat=test_dat)
     
     # Saliency U-Net (FLAIR+IAM)
     train_dat = [train_data[0:2], train_trgt]
-    test_dat = [test_data[0:2], train_trgt]
+    test_dat = [test_data[0:2], test_trgt]
     train_model(train_config,START_TIME, net_depth=3, SALIENCY=True, DILATION=False, 
-                restore_dir=None, net_name='F+I', train_dat, test_dat)
+                restore_dir=None, net_type='F+I', train_dat=train_dat, test_dat=test_dat)
     
     # Saliency U-Net (FLAIR+IAM+T1w)
     train_dat = [train_data, train_trgt]
-    test_dat = [test_data, train_trgt]
+    test_dat = [test_data, test_trgt]
     train_model(train_config,START_TIME, net_depth=3, SALIENCY=True, DILATION=False, 
-                restore_dir=None, net_name='All', train_dat, test_dat)
+                restore_dir=None, net_type='All', train_dat=train_dat, test_dat=test_dat)
     
     # Dilated Saliency U-Net (FLAIR + IAM)
     train_dat = [train_data[0:2], train_trgt]
-    test_dat = [test_data[0:2], train_trgt]
+    test_dat = [test_data[0:2], test_trgt]
     train_model(train_config,START_TIME, net_depth=3, SALIENCY=True, DILATION=True, 
-                restore_dir=None, net_name='F+I', train_dat, test_dat)
+                restore_dir=None, net_type='F+I', train_dat=train_dat, test_dat=test_dat)
     
     # Dilated Saliency U-Net (FLAIR + IAM + T1w)
     train_dat = [train_data, train_trgt]
-    test_dat = [test_data, train_trgt]
+    test_dat = [test_data, test_trgt]
     train_model(train_config,START_TIME, net_depth=3, SALIENCY=True, DILATION=True, 
-                restore_dir=None, net_name='All', train_dat, test_dat)
-
+                restore_dir=None, net_type='All', train_dat=train_dat, test_dat=test_dat)
 
     
     # Clear memory

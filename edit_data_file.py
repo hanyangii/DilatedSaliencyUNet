@@ -7,15 +7,16 @@ new_txt_file_dir = "data/com_"+txt_file_dir
 prefix = "/mnt/HDD/febrian/"
 split = "Storage/"
 
-file_list = ['flair_0.txt','flair_1.txt']
-new_file = ['csf_0.txt','csf_1.txt']
+
+file_list = ['csf_1.txt']
+new_file = ['iam_1.txt']
 for i,txt in enumerate(file_list):
     with open(new_txt_file_dir+new_file[i],"w") as n:
         with open(new_txt_file_dir+txt,"r") as f:
             while True:
                 line = f.readline()
                 if not line: break
-                new_line = re.sub('FLAIR.nii.gz','CSF_men_cleaned.nii.gz',line)
+                new_line = re.sub('CSF_men_cleaned.nii.gz','IAM_GPU_result_def.nii.gz',line)
                 n.write(new_line)
 
 '''
