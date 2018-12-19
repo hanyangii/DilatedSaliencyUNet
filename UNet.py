@@ -70,14 +70,12 @@ class UNet:
 
 class Saliency_UNet(UNet):
     
-    def __init__(self, input_shape, num_modal, lr, loss, activation):
+    def __init__(self, input_shape, num_modal, num_class, lr, loss, activation):
         
-        self.network = self.building_net(input_shape, num_modal, num_class=3, activation=activation)
+        self.network = self.building_net(input_shape, num_modal,num_class, activation=activation)
         self.network.compile(optimizer=Adam(lr=lr), loss=loss, metrics=[categorical_accuracy, dice_coef])
-        
-        return self.network
-    
-    def building_net(self, input_shape, num_modal, activation, DILATION=False):
+            
+    def building_net(self, input_shape, num_modal, num_class, activation, DILATION=False):
         modal_order = ['flair', 'iam', 't1w']
         inputs = []
         conv_stack = []
@@ -87,25 +85,29 @@ class Saliency_UNet(UNet):
         
         for m in range(num_modal):
             modal = modal_order[m]
+            print(modal)
             input_layer = Input(input_shape, name=modal+'_layer')
             inputs.append(input_layer)
             
-            if m==2: activation = 'Lrelu'
-            else: activation = 'relu'
-            if DILATION: d1,d2 =[4,2],[2,1]
-            else: d1, d2=[1,1]
+            if m==2: modal_activation = 'Lrelu'
+            else: modal_activation = 'relu'
+            if DILATION: 
+                d1 = [4,2]
+                d2 = [2,1]
+            else: 
+                d1 = d2=[1,1]
                 
-            conv_1, pool_1 = self.encoder_block(inputs, activation, 
+            conv_1, pool_1 = self.encoder_block(input_layer, modal_activation, 
                                                 modal[0], 64, (5,5), 0, d1)
-            conv_2, pool_2 = self.encoder_block(pool_1, activation, 
+            conv_2, pool_2 = self.encoder_block(pool_1, modal_activation, 
                                                 modal[0], 128, (3,3), 1, d2)
             skip_layers1.append(conv_1)
             skip_layers2.append(conv_2)
             concat_layers.append(pool_2)
 
-        conv = self.decoder_block(concat_layers, 256, (3,3), 2)
-        conv = self.decoder_block([conv]+skip_layers2, 128, (3,3), 3)
-        conv = self.decoder_block([conv]+skip_layers1, 64, (3,3), 4)
+        conv = self.decoder_block(concat_layers, 256, (3,3), 2, True)
+        conv = self.decoder_block([conv]+skip_layers2, 128, (3,3), 3, True)
+        conv = self.decoder_block([conv]+skip_layers1, 64, (3,3), 4, False)
         
         ## Fully Connected
         fconv = Conv2D(num_class, (1,1), padding='same', activation=activation, name='conv2d_5')(conv)
@@ -127,22 +129,22 @@ class Saliency_UNet(UNet):
                 
         return conv, pool
     
-    def decoder_block(self, concat, filters, filter_size, depth):
+    def decoder_block(self, concat, filters, filter_size, depth, UP_SAMPLE):
         d = str(depth)
         conv = concatenate(concat, axis=-1, name='concat_'+d)
         conv = super().conv_block('relu', filters, filter_size, conv, depth_num=d+'_0')
         conv = Dropout(0.25, name='do_'+d)(conv)
         conv = super().conv_block('relu', filters, filter_size, conv, depth_num=d+'_1')
-        conv = UpSampling2D(size=(2,2), name='up2d_'+d)(conv)
+        if UP_SAMPLE:
+            conv = UpSampling2D(size=(2,2), name='up2d_'+d)(conv)
         
         return conv
 
 class Dilated_Saliency_UNet(Saliency_UNet):
     
-    def __init__(self, input_shape, num_modal, lr, loss, activation):
-        self.network = super().building_net(input_shape, num_modal, num_class=3, activation=activation, DIALTION=True)
+    def __init__(self, input_shape, num_modal, num_class, lr, loss, activation):
+        self.network = super().building_net(input_shape, num_modal,num_class, activation=activation, DILATION=True)
         self.network.compile(optimizer=Adam(lr=lr), loss=loss, metrics=[categorical_accuracy, dice_coef])
         
-        return self.network
     
     

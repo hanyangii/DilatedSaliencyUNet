@@ -58,7 +58,7 @@ if __name__ == '__main__':
     
     print("Reading TEST data..")
     test_data, test_trgt = generate_slice_data(test_config_dir, 1, random_num, data_chn_num, args.test)
-    
+      
     print(train_data.shape, ' class max val:',np.max(train_trgt))
 
     # Reshape datat to 4-dims
@@ -83,14 +83,18 @@ if __name__ == '__main__':
                 restore_dir=None, net_type='IAM', train_dat=train_dat, test_dat=test_dat)
     
     # U-Net (FLAIR + IAM)
-    train_dat = [train_data[0:2], train_trgt]
-    test_dat = [test_data[0:2], test_trgt]
+    train_dat = np.concatenate(train_data[0:2], axis=3)
+    test_dat = np.concatenate(test_data[0:2], axis=3)    
+    train_dat = [train_dat, train_trgt]
+    test_dat = [test_dat, test_trgt]
     train_model(train_config,START_TIME, net_depth=3, SALIENCY=False, DILATION=False, 
                 restore_dir=None, net_type='F+I', train_dat=train_dat, test_dat=test_dat)
     
     # U-Net (FLAIR + IAM + T1w)
-    train_dat = [train_data, train_trgt]
-    test_dat = [test_data, test_trgt]
+    train_dat = np.concatenate(train_data, axis=-1)
+    test_dat = np.concatenate(test_data, axis=-1)  
+    train_dat = [train_dat, train_trgt]
+    test_dat = [test_dat, test_trgt]
     train_model(train_config,START_TIME, net_depth=3, SALIENCY=False, DILATION=False, 
                 restore_dir=None, net_type='All', train_dat=train_dat, test_dat=test_dat)
     

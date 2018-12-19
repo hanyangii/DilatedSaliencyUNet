@@ -2,21 +2,34 @@ import keras
 
 class TestCallback(keras.callbacks.Callback):
     
-    def __init__(self, test_data, test_label, epoch=1):
+    def __init__(self, test_data, test_label, save_dir, epoch=1):
         self.test_data = test_data
         self.test_label = test_label
+        self.save_dir = save_dir
         self.ep = epoch
     
     def on_train_begin(self, logs={}):
         self.test_loss = []
         self.test_accuracy = []
+        self.test_dicecoef = []
 
     def on_epoch_end(self, epoch, logs={}):
         if (epoch%self.ep)==0:
-            loss, acc = self.model.evaluate(self.test_data, self.test_label, verbose=0)
-            self.test_loss.append(loss)
-            self.test_accuracy.append(acc)
-            print('\nTesting loss: {}, acc: {}\n'.format(loss, acc))
+            metrics= self.model.evaluate(self.test_data, self.test_label, batch_size=16, verbose=0)
+            self.test_loss.append(metrics[0])
+            self.test_accuracy.append(metrics[1])
+            self.test_dicecoef.append(metrics[2])
+            print('Testing loss: {}, categorical-acc: {}, dice-coef: {}\n'.format(metrics[0], metrics[1], metrics[2]))
+    
+    def on_train_end(self, logs={}):
+        with open(self.save_dir+'test_loss.txt',"w") as n:
+            for val in self.test_loss: n.write(str(val)+'\n')
+         
+        with open(self.save_dir+'test_categorical_accuracy.txt',"w") as n:
+            for val in self.test_accuracy: n.write(str(val)+'\n')
+                
+        with open(self.save_dir+'test_dice_coef.txt',"w") as n:
+            for val in self.test_dicecoef: n.write(str(val)+'\n')
 
 class TrainConfig(object):
     
@@ -30,7 +43,7 @@ class TrainConfig(object):
         self.hist_freq = 10 if self.VISUALISATION else 0
         self.loss = args.loss
         self.fold = args.fold
-        self.n_class = 1
+        self.n_class = 3
         self.reduce_lr_factor = args.reduce_lr_factor
         self.reduce_lr_patience = args.reduce_lr_patience
 

@@ -24,17 +24,17 @@ from UNet import UNet, Saliency_UNet, Dilated_Saliency_UNet
 
 class Net_Model:
     
-    def __init__(self, layer_level, input_shape, Loss, lr, num_chn=3, num_class=2, VISUALISATION=False, SALIENCY=False, DILATION=False):
+    def __init__(self, layer_level, input_shape, Loss, lr,num_modal, num_chn=3, num_class=2, VISUALISATION=False, SALIENCY=False, DILATION=False):
         self.layer_level = layer_level
         self.input_shape = input_shape
         self.num_class = num_class
         self.train_setting(Loss)
         
         if DILATION and SALIENCY:
-            self.model = Dilated_Saliency_UNet(input_shape, num_chn, lr, self.loss, self.activation)
+            self.model = Dilated_Saliency_UNet(input_shape, num_modal, num_class, lr, self.loss, self.activation)
             self.net_name ='Dilated_Saliency_UNet'
         elif SALIENCY:
-            self.model = Saliency_UNet(input_shape, num_chn, lr, self.loss, self.activation)
+            self.model = Saliency_UNet(input_shape, num_modal, num_class, lr, self.loss, self.activation)
             self.net_name ='Saliency_UNet'
         else:
             input_shape = list(input_shape)
@@ -158,6 +158,7 @@ class Net_Model:
         keras.backend.get_session().run(tf.global_variables_initializer())
     
     def train(self, train_data, train_trgt, val_split, epochs, nb_samples, callbacks):
+        print('Metrics : ', self.model.metrics_names)
 
         self.history_callback = self.model.fit(x = train_data, 
                                         y = train_trgt,
@@ -202,9 +203,9 @@ class Net_Model:
             f.close()
     
     def save_img_results(self, saving_dir, test_data, test_trgt):
-        print('Test data number : ',str(test_data[0].shape[0]),' Slices') 
-        '''
-        test_data = np.concatenate(test_data, axis=3)
+        print('Test data number : ',str(test_data.shape[0]),' Slices') 
+        
+        test_data = list(test_data)
         test_data_img = []
         test_trgt_img = []
         for i in range(10):
@@ -213,13 +214,9 @@ class Net_Model:
             print('Slice ',i,' Number of WMH voxels: GT - ',np.sum(np.where(test_trgt[20+35*i]==2)))
         
         test_data_img = np.array(test_data_img)
-        num_chn = test_data_img.shape[-1]
-        data_img = [np.expand_dims(test_data_img[:,:,:,idx], axis=3) for idx in range(num_chn)]
-        test_trgt_img = np.array(test_trgt_img)
-        '''
         
-        test_pred_img = self.model.evaluate(test_data, test_trgt, verbose=0)#model.predict(test_data, verbose=1)
-        
+        test_pred_img = self.model.predict(test_data, verbose=1)
+       	''' 
         chn = ['FLAIR','IAM', 'T1W']
         
         fig_idx = 0
@@ -260,7 +257,8 @@ class Net_Model:
             fig_idx = fig_idx+1
 
         fig.savefig(saving_dir+'test_result_img.png')
-        
+        '''
+
     def layer_init(self, init_num):
         #Initialise layers
         model_len = len(self.model.layers)-1

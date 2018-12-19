@@ -23,7 +23,12 @@ def train_model(config, START_TIME, net_depth, SALIENCY, DILATION, restore_dir, 
     train_trgt = train_dat[1]
     test_data = test_dat[0]
     test_trgt = test_dat[1]
-    num_chn = np.shape(train_dat)[-1]
+    if isinstance(train_data, list): 
+        num_chn = np.shape(train_data)[-1]
+        num_modal = len(train_data)
+    else: 
+        num_chn = train_data.shape[-1]
+        num_modal = num_chn
     
     elapsed_times_all = np.zeros((config.fold))
     
@@ -32,6 +37,7 @@ def train_model(config, START_TIME, net_depth, SALIENCY, DILATION, restore_dir, 
         my_network = Net_Model(net_depth, (None, None, num_chn), 
                                 Loss=config.loss, 
                                 lr=config.lr, 
+                                num_modal = num_modal,
                                 num_chn = num_chn,
                                 num_class=config.n_class,
                                 VISUALISATION = config.VISUALISATION,
@@ -71,13 +77,14 @@ def train_model(config, START_TIME, net_depth, SALIENCY, DILATION, restore_dir, 
         # History Callbacks
         tensorboard = TensorBoard(log_dir = saving_dir + 'tensorboard_log/', batch_size = config.batch_size, histogram_freq = config.hist_freq) 
         reduce_lr = ReduceLROnPlateau(monitor='val_dice_coef', factor=config.reduce_lr_factor, mode='max', patience=config.reduce_lr_patience, min_lr=2e-10)
-        test_callback = TestCallback(test_data, test_trgt)
+        test_callback = TestCallback(test_data, test_trgt, saving_dir)
         
+       
         # Train network
-        my_network.train(train_data, train_trgt, 0.2, config.num_epochs, config.batch_size, [reduce_lr,  tensorboard])
+        my_network.train(train_data, train_trgt, 0.2, config.num_epochs, config.batch_size, [reduce_lr,  test_callback, tensorboard])
         ## Save Results
         elapsed_times_all[b_id] = timer() - one_timer
         my_network.save_statistic_results(saving_dir, elapsed_times_all)
-        my_network.save_img_results(saving_dir, test_data, test_trgt)
+        #my_network.save_img_results(saving_dir, test_data, test_trgt)
         
         my_netowrk = None
