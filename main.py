@@ -69,7 +69,7 @@ if __name__ == '__main__':
     
     ''' Train Networks'''
     train_config = TrainConfig(args)
-    
+    '''
     # U-Net (only FLAIR)
     train_dat = [train_data[0], train_trgt]
     test_dat = [test_data[0], test_trgt]
@@ -81,7 +81,7 @@ if __name__ == '__main__':
     test_dat = [test_data[1], test_trgt]
     train_model(train_config,START_TIME, net_depth=3, SALIENCY=False, DILATION=False, 
                 restore_dir=None, net_type='IAM', train_dat=train_dat, test_dat=test_dat)
-    
+    '''
     # U-Net (FLAIR + IAM)
     train_dat = np.concatenate(train_data[0:2], axis=3)
     test_dat = np.concatenate(test_data[0:2], axis=3)    
