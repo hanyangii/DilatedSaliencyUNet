@@ -49,7 +49,7 @@ class UNet:
             conv = concatenate([conv, conv_stack.pop()], axis=-1, name='concat_'+str(d))
         
         ## Fully Connected
-        fconv = Conv2D(num_class, (1,1), padding='same', activation=activation, name='conv2d_'+str(depth*2),kernel_initializer='he_normal')(conv)
+        fconv = Conv2D(num_class, (1,1), padding='same', activation=activation, name='conv2d_'+str(depth*2))(conv)
         
         model = Model(input=inputs, output=fconv)
         
@@ -57,7 +57,7 @@ class UNet:
     
     def conv_block(self, activation, filters, filter_size, input_layer, depth_num, modal_name="", dilation=1):
         conv = Conv2D(filters, filter_size, padding='same',
-                      name='conv2d_'+modal_name+depth_num,kernel_initializer='he_normal',
+                      name='conv2d_'+modal_name+depth_num,
                       dilation_rate = dilation)(input_layer)
         conv = BatchNormalization(name='bn_'+modal_name+depth_num)(conv)
         if activation=='relu':
@@ -110,7 +110,7 @@ class Saliency_UNet(UNet):
 conv = self.decoder_block([conv]+skip_layers1, 64, (3,3), 4, False)
         
         ## Fully Connected
-        fconv = Conv2D(num_class, (1,1), padding='same', activation=activation, name='conv2d_5',kernel_initializer='he_normal')(conv)
+        fconv = Conv2D(num_class, (1,1), padding='same', activation=activation, name='conv2d_5')(conv)
         
         model = Model(input=inputs, output=fconv)
         
@@ -177,7 +177,7 @@ class Noppoling_Dilated_Saliency_UNet(UNet):
         
         ## Fully Connected
         #conv = super().conv_block('relu', 256, (3,3), conv, depth_num='5_0_d1', dilation=1)
-        fconv = Conv2D(num_class, (1,1), padding='same', activation=activation, name='conv2d_5',kernel_initializer='he_normal')(conv)
+        fconv = Conv2D(num_class, (1,1), padding='same', activation=activation, name='conv2d_5')(conv)
         
         model = Model(input=inputs, output=fconv)
         
