@@ -49,7 +49,7 @@ class UNet:
             conv = concatenate([conv, conv_stack.pop()], axis=-1, name='concat_'+str(d))
         
         ## Fully Connected
-        fconv = Conv2D(num_class, (1,1), padding='same', activation=activation, name='conv2d_'+str(depth*2))(conv)
+        fconv = Conv2D(num_class, (1,1), padding='same', activation=activation, name='conv2d_'+str(depth*2),kernel_initializer='he_normal')(conv)
         
         model = Model(input=inputs, output=fconv)
         
@@ -57,7 +57,7 @@ class UNet:
     
     def conv_block(self, activation, filters, filter_size, input_layer, depth_num, modal_name="", dilation=1):
         conv = Conv2D(filters, filter_size, padding='same',
-                      name='conv2d_'+modal_name+depth_num,
+                      name='conv2d_'+modal_name+depth_num,kernel_initializer='he_normal',
                       dilation_rate = dilation)(input_layer)
         conv = BatchNormalization(name='bn_'+modal_name+depth_num)(conv)
         if activation=='relu':
@@ -107,10 +107,10 @@ class Saliency_UNet(UNet):
 
         conv = self.decoder_block(concat_layers, 256, (3,3), 2, True)
         conv = self.decoder_block([conv]+skip_layers2, 128, (3,3), 3, True)
-        conv = self.decoder_block([conv]+skip_layers1, 64, (3,3), 4, False)
+conv = self.decoder_block([conv]+skip_layers1, 64, (3,3), 4, False)
         
         ## Fully Connected
-        fconv = Conv2D(num_class, (1,1), padding='same', activation=activation, name='conv2d_5')(conv)
+        fconv = Conv2D(num_class, (1,1), padding='same', activation=activation, name='conv2d_5',kernel_initializer='he_normal')(conv)
         
         model = Model(input=inputs, output=fconv)
         
@@ -140,11 +140,78 @@ class Saliency_UNet(UNet):
         
         return conv
 
+class Noppoling_Dilated_Saliency_UNet(UNet):
+    
+    def __init__(self, input_shape, num_modal, num_class, lr, loss, activation):
+        
+        self.network = self.building_net(input_shape, num_modal,num_class, activation=activation)
+        self.network.compile(optimizer=Adam(lr=lr), loss=loss, metrics=[categorical_accuracy, dice_coef])
+            
+    def building_net(self, input_shape, num_modal, num_class, activation, DILATION=False):
+        modal_order = ['flair', 'iam', 't1w']
+        inputs = []
+        conv_stack = []
+        skip_layers1 = []
+        concat_layers = []
+        
+        for m in range(num_modal):
+            modal = modal_order[m]
+            print(modal)
+            input_layer = Input(input_shape, name=modal+'_input_layer')
+            inputs.append(input_layer)
+            
+            if m==2: modal_activation = 'Lrelu'
+            else: modal_activation = 'relu'
+                
+            conv_1 = self.encoder_block(input_layer, modal_activation, 
+                                                modal[0], [64,128], (5,5), 0, [1,2])
+            conv_2 = self.encoder_block(conv_1, modal_activation, 
+                                                modal[0], [256,256], (3,3), 1, [4,2])
+           
+            skip_layers1.append(conv_1)
+            concat_layers.append(conv_2)
+
+        conv = self.decoder_block(concat_layers, [256, 256], [(3,3),(5,5)], 2, [2,1])
+        conv = self.decoder_block([conv]+skip_layers1, [128,64] , [(3,3),(3,3)], 3, [1,1])
+        #conv = self.decoder_block(conv, 64, [(3,3),(3,3)], 4, [1,1])
+        
+        ## Fully Connected
+        #conv = super().conv_block('relu', 256, (3,3), conv, depth_num='5_0_d1', dilation=1)
+        fconv = Conv2D(num_class, (1,1), padding='same', activation=activation, name='conv2d_5',kernel_initializer='he_normal')(conv)
+        
+        model = Model(input=inputs, output=fconv)
+        
+        return model
+    
+    def encoder_block(self, inputs, activation, modality, filters, filter_size, depth, dilation=[1,1]):
+        
+        depth = modality+'_'+str(depth)
+        conv = super().conv_block(activation, filters[0], filter_size, inputs, depth_num = depth+'_0_d'+str(dilation[0]), dilation=dilation[0])
+        conv = super().conv_block(activation, filters[1], filter_size, conv, depth_num = depth+'_1_d'+str(dilation[1]), dilation=dilation[1])
+        
+
+        return conv 
+    
+    def decoder_block(self, concat, filters, filter_size, depth, dilation):
+        d = str(depth)
+        if isinstance(concat, list):
+            conv = concatenate(concat, axis=-1, name='concat_'+d)
+        else:
+            conv = concat
+        conv = super().conv_block('relu', filters[0], filter_size[0], conv, depth_num=d+'_0_d'+str(dilation[0]), dilation=dilation[0])
+        conv = Dropout(0.25, name='do_'+d)(conv)
+        conv = super().conv_block('relu', filters[1], filter_size[1], conv, depth_num=d+'_1_d'+str(dilation[1]), dilation=dilation[1])
+        
+        return conv    
+    
 class Dilated_Saliency_UNet(Saliency_UNet):
     
     def __init__(self, input_shape, num_modal, num_class, lr, loss, activation):
         self.network = super().building_net(input_shape, num_modal,num_class, activation=activation, DILATION=True)
         self.network.compile(optimizer=Adam(lr=lr), loss=loss, metrics=[categorical_accuracy, dice_coef])
-        
+     
+
+    
+
     
     

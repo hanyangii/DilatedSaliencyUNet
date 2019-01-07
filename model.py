@@ -20,7 +20,8 @@ from keras.losses import categorical_crossentropy
 from tensorflow.python.ops import array_ops
 from tensorflow.python.summary import summary as tf_summary
 
-from UNet import UNet, Saliency_UNet, Dilated_Saliency_UNet
+from UNet import UNet, Saliency_UNet, Dilated_Saliency_UNet, Noppoling_Dilated_Saliency_UNet
+from UNet_lib import dice_coef_loss
 
 class Net_Model:
     
@@ -28,11 +29,15 @@ class Net_Model:
         self.layer_level = layer_level
         self.input_shape = input_shape
         self.num_class = num_class
+        self.num_modal = num_modal
+        self.num_chn = num_chn
         self.train_setting(Loss)
         
         if DILATION and SALIENCY:
             self.model = Dilated_Saliency_UNet(input_shape, num_modal, num_class, lr, self.loss, self.activation)
             self.net_name ='Dilated_Saliency_UNet'
+            #self.model = Noppoling_Dilated_Saliency_UNet(input_shape, num_modal, num_class, lr, self.loss, self.activation)
+            #self.net_name ='Nopooling_Dilated_Saliency_UNet'
         elif SALIENCY:
             self.model = Saliency_UNet(input_shape, num_modal, num_class, lr, self.loss, self.activation)
             self.net_name ='Saliency_UNet'
@@ -63,8 +68,8 @@ class Net_Model:
             self.loss = iou_loss
             self.activation = 'softmax'
             self.num_class = 3
-        elif Loss == 'iou_crossentropy':
-            self.loss = iou_crossentropy_loss
+        elif Loss == 'dice_crossentropy':
+            self.loss = dice_coef_loss
             self.activation = 'softmax'
             self.num_class = 3
         else:
@@ -117,22 +122,38 @@ class Net_Model:
             # scaling to [0, 255] is not necessary for tensorboard
             return x
         
+        patch_shape = np.array([64, 64])
         prev_layer = None
         for idx, layer in enumerate(self.model.layers):
             
             if 'input' in layer.name:
                 input_i = layer.input
+                chn = self.input_shape[-1]
                 input_img = array_ops.squeeze(input_i)
                 img = input_img[0,:,:]
                 #img = array_ops.transpose(img, perm=[2,0,1])
                 #img = tf.concat([img[0],img[1]],axis=1)
                 img = tf.expand_dims(img, 0)
-                img = tf.expand_dims(img, 3)
-                tf_summary.image(layer.name, img)
+                if chn > 1:
+                    for i in range(chn):
+                        slices = img[:,:,:,i]
+                        slices = tf.expand_dims(slices, 3)
+                        tf_summary.image(layer.name+'_'+str(i), slices)
+                else:
+                    img = tf.expand_dims(img, 3)
+                    tf_summary.image(layer.name, img)
             elif 'maxpool' in layer.name or 'up2d' in layer.name:
-                shape = np.concatenate([np.array([1]),self.shape_list.pop(0)])
-                print(layer.name,shape)
                 output = layer.output
+                chn = output.get_shape().as_list()[-1]
+                if 'maxpool' in layer.name: 
+                    patch_shape = patch_shape/2
+                    if 'maxpool2d_i' in layer.name: patch_shape = patch_shape*2
+                else: patch_shape = patch_shape*2
+                shape = np.array([1])
+                shape = np.concatenate([shape, patch_shape, np.array([chn])]).astype(int)
+
+                print(layer.name,shape)
+                
                 output_name = layer.name.replace(':','_')
                 output_img = array_ops.squeeze(output)
                 # pick the output of one slice
@@ -140,6 +161,7 @@ class Net_Model:
                 output_img = tf.expand_dims(output_img, 0)
                 output_img = put_kernels_on_grid(output_img, shape)
                 tf_summary.image(output_name, output_img)
+                
             elif idx == len(self.model.layers)-1:
                 output = layer.output
                 output_name = layer.name.replace(':','_')
@@ -203,37 +225,69 @@ class Net_Model:
             f.close()
     
     def save_img_results(self, saving_dir, test_data, test_trgt):
-        print('Test data number : ',str(test_data.shape[0]),' Slices') 
-        
-        test_data = list(test_data)
+        sh = np.shape(test_data)
+        num_chn = self.input_shape[-1]
         test_data_img = []
         test_trgt_img = []
-        for i in range(10):
-            test_data_img.append(test_data[20+35*i])
-            test_trgt_img.append(test_trgt[20+35*i])
-            print('Slice ',i,' Number of WMH voxels: GT - ',np.sum(np.where(test_trgt[20+35*i]==2)))
+        slice_num = 0
         
-        test_data_img = np.array(test_data_img)
-        
-        test_pred_img = self.model.predict(test_data, verbose=1)
-       	''' 
+        print(sh)
+        if self.num_chn == 1 and self.num_modal>1: 
+            test_data = np.array(test_data)
+            for i in range(10):
+                idx = 20+35*i
+                if idx >= sh[1]: break
+                test_data_img.append(test_data[:,idx,:,:,:])
+                test_trgt_img.append(test_trgt[idx])
+                slice_num = i+1
+                print('Slice ',i,' Number of WMH voxels: GT - ',np.sum(np.where(test_trgt[idx]==2)))
+            
+            test_data_input = np.array(test_data_img)
+            test_data_input = np.swapaxes(test_data_input, 0, 1)
+            test_data_input = list(test_data_input)
+        else:
+            for i in range(10):
+                idx = 20+35*i
+                if idx >= len(test_data): break
+                test_data_img.append(test_data[idx])
+                test_trgt_img.append(test_trgt[idx])
+                slice_num = i+1
+                print('Slice ',i,' Number of WMH voxels: GT - ',np.sum(np.where(test_trgt[idx]==2)))
+
+            test_data_input = np.array(test_data_img)
+            
+        print(np.shape(test_data_input), np.shape(test_data_img))
+        test_pred_img = self.model.predict(test_data_input, verbose=1)
         chn = ['FLAIR','IAM', 'T1W']
         
+        num_chn = self.num_modal
         fig_idx = 0
-        fig, ax = plt.subplots(10, num_chn+2)
-        fig.set_size_inches((num_chn+2)*5, 50)
+        fig, ax = plt.subplots(slice_num, num_chn+5)
+        fig.set_size_inches((num_chn+5)*5, 50)
 
         for data_img, pred_img, gt_img in zip(test_data_img, test_pred_img, test_trgt_img):
+            shape = data_img.shape #modal, x, y, chn 
             print(data_img.shape, pred_img.shape, gt_img.shape)
             gt_img = (gt_img[:,:,0]).astype(np.float)
+            
             # Convert class probability map to labels
             if pred_img.shape[-1]>1:
+                prob_map = pred_img
                 pred_img = (np.argmax(pred_img, axis=2)).astype(np.float)
             else:
-                pred_img = (pred_img[:,:,0].astype(np.float))
+                pred_img = (pred_img[:,:,0].astype(np.int32))
+                prob_map = (pred_img[:,:,-1].astype(np.float))
 
-            for j in range(num_chn):
-                flair_img = (data_img[:,:,j]).astype(np.float)
+            for j in range(self.num_modal):
+                if len(shape)>3:
+                    print('ddddd ', j)
+                    flair_img = np.squeeze((data_img[j, :,:,:]).astype(np.float))
+                #elif shape[-1]>1:
+                #    print('eeee ', j)
+                #    flair_img = (data_img[:,:,j]).astype(np.float)
+                else:
+                    print('ffff ', j)
+                    flair_img = data_img[:,:,j].astype(np.float)
                 cmap='gray'
                 if j==1 : cmap='jet'
                 ax0 = ax[fig_idx, j].imshow(flair_img, cmap=cmap)
@@ -253,11 +307,18 @@ class Net_Model:
             divider2 = make_axes_locatable(ax[fig_idx, num_chn+1])
             cax2 = divider2.append_axes("right", size="7%", pad=0.05)
             fig.colorbar(ax2, cax=cax2)
+            
+            for k in range(prob_map.shape[-1]):
+                ax3 = ax[fig_idx, num_chn+2+k].imshow(prob_map[:,:,k], cmap='gray', vmin=0, vmax=1)
+                ax[fig_idx, num_chn+2+k].set_title('WMH probability map label_'+str(k))
+                divider3 = make_axes_locatable(ax[fig_idx, num_chn+2+k])
+                cax3 = divider3.append_axes("right", size="7%", pad=0.05)
+                fig.colorbar(ax3, cax=cax3)
 
             fig_idx = fig_idx+1
 
         fig.savefig(saving_dir+'test_result_img.png')
-        '''
+        
 
     def layer_init(self, init_num):
         #Initialise layers

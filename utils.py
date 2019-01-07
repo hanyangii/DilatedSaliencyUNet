@@ -46,6 +46,7 @@ class TrainConfig(object):
         self.n_class = 3
         self.reduce_lr_factor = args.reduce_lr_factor
         self.reduce_lr_patience = args.reduce_lr_patience
+        self.dir_name = args.dir_name
 
 def set_parser(parser):
     # Arguments for training

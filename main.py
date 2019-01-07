@@ -42,14 +42,14 @@ if __name__ == '__main__':
     else:
         img_x, img_y, img_z = args.img_size, args.img_size, 1
 
-    patch_size = str(img_x)+'size_chn'+str(data_chn_num)
-    net_name = args.dir_name+'_'+patch_size
+    #patch_size = str(img_x)+'size_chn'+str(data_chn_num)
+    #net_name = args.dir_name+'_'+patch_size
     
     ''' Load Data '''
     train_config_dir = 'data/com_test_configs_2fold_adni60'
     test_config_dir = 'data/com_test_configs_2fold_adni60'
     
-    restore_weights_path = 'results/64_only_dial_enc_Saliency_depth4_BN_beforeRELU_DO025_Reducelr5_20181211-1337_64x64x1_chn3_cv0_ep50/train_models.h5'
+    restore_weights_path = 'results/basic_experiments_9/'
     
     win_shape = (img_x, img_y, img_z)
 
@@ -69,7 +69,7 @@ if __name__ == '__main__':
     
     ''' Train Networks'''
     train_config = TrainConfig(args)
-    '''
+    
     # U-Net (only FLAIR)
     train_dat = [train_data[0], train_trgt]
     test_dat = [test_data[0], test_trgt]
@@ -77,12 +77,18 @@ if __name__ == '__main__':
                 restore_dir=None, net_type='UNet_depth3_FLAIR', train_dat=train_dat, test_dat=test_dat)
     
     # U-Net (only IAM)
+    K.clear_session()
+    sess = tf.Session(config=config)
+    K.set_session(sess)
     train_dat = [train_data[1], train_trgt]
     test_dat = [test_data[1], test_trgt]
     train_model(train_config,START_TIME, net_depth=3, SALIENCY=False, DILATION=False, 
                 restore_dir=None, net_type='IAM', train_dat=train_dat, test_dat=test_dat)
-    '''
+    
     # U-Net (FLAIR + IAM)
+    K.clear_session()
+    sess = tf.Session(config=config)
+    K.set_session(sess)
     train_dat = np.concatenate(train_data[0:2], axis=3)
     test_dat = np.concatenate(test_data[0:2], axis=3)    
     train_dat = [train_dat, train_trgt]
@@ -91,6 +97,9 @@ if __name__ == '__main__':
                 restore_dir=None, net_type='F+I', train_dat=train_dat, test_dat=test_dat)
     
     # U-Net (FLAIR + IAM + T1w)
+    K.clear_session()
+    sess = tf.Session(config=config)
+    K.set_session(sess)
     train_dat = np.concatenate(train_data, axis=-1)
     test_dat = np.concatenate(test_data, axis=-1)  
     train_dat = [train_dat, train_trgt]
@@ -98,30 +107,45 @@ if __name__ == '__main__':
     train_model(train_config,START_TIME, net_depth=3, SALIENCY=False, DILATION=False, 
                 restore_dir=None, net_type='All', train_dat=train_dat, test_dat=test_dat)
     
+    
     # Saliency U-Net (FLAIR+IAM)
+    K.clear_session()
+    sess = tf.Session(config=config)
+    K.set_session(sess)
     train_dat = [train_data[0:2], train_trgt]
     test_dat = [test_data[0:2], test_trgt]
     train_model(train_config,START_TIME, net_depth=3, SALIENCY=True, DILATION=False, 
                 restore_dir=None, net_type='F+I', train_dat=train_dat, test_dat=test_dat)
     
     # Saliency U-Net (FLAIR+IAM+T1w)
+    K.clear_session()
+    sess = tf.Session(config=config)
+    K.set_session(sess)
     train_dat = [train_data, train_trgt]
     test_dat = [test_data, test_trgt]
     train_model(train_config,START_TIME, net_depth=3, SALIENCY=True, DILATION=False, 
                 restore_dir=None, net_type='All', train_dat=train_dat, test_dat=test_dat)
-    
+     
     # Dilated Saliency U-Net (FLAIR + IAM)
+    #restore_weights_path+'F+I_20181220-1123_Dilated_Saliency_UNet_ep80_0/train_models.h5'
+    K.clear_session()
+    sess = tf.Session(config=config)
+    K.set_session(sess)
     train_dat = [train_data[0:2], train_trgt]
     test_dat = [test_data[0:2], test_trgt]
     train_model(train_config,START_TIME, net_depth=3, SALIENCY=True, DILATION=True, 
                 restore_dir=None, net_type='F+I', train_dat=train_dat, test_dat=test_dat)
     
+    
     # Dilated Saliency U-Net (FLAIR + IAM + T1w)
+    K.clear_session()
+    sess = tf.Session(config=config)
+    K.set_session(sess)
     train_dat = [train_data, train_trgt]
     test_dat = [test_data, test_trgt]
     train_model(train_config,START_TIME, net_depth=3, SALIENCY=True, DILATION=True, 
                 restore_dir=None, net_type='All', train_dat=train_dat, test_dat=test_dat)
-
+    
     
     # Clear memory
     train_trgt = None

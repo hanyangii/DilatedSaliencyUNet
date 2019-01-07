@@ -1,4 +1,4 @@
-import os, time, h5py, argparse, sys
+import os, time, h5py, argparse, sys, shutil
 
 import scipy.io as sio
 import numpy as np
@@ -30,6 +30,7 @@ def train_model(config, START_TIME, net_depth, SALIENCY, DILATION, restore_dir, 
         num_chn = train_data.shape[-1]
         num_modal = num_chn
     
+    print('num chn: ', num_chn, ' / num_modal: ', num_modal)
     elapsed_times_all = np.zeros((config.fold))
     
     for b_id in range(config.fold):  
@@ -45,6 +46,7 @@ def train_model(config, START_TIME, net_depth, SALIENCY, DILATION, restore_dir, 
                                 DILATION=DILATION)
         
         net_name = net_type+'_'+START_TIME+'_'+my_network.net_name
+        if len(config.dir_name)>0: net_name = net_name+'_'+config.dir_name
         print("\nBuilt network: "+my_network.net_name+"...")
         
         if restore_dir:
@@ -61,12 +63,13 @@ def train_model(config, START_TIME, net_depth, SALIENCY, DILATION, restore_dir, 
         print('\n\nSaving_filename: ' + saving_filename)
         saving_dir = './results/'+saving_filename+'/'
         if os.path.exists(saving_dir):
-            os.rmdir(saving_dir)
+            shutil.rmtree(saving_dir)
         os.mkdir(saving_dir)
         
         # to_categorical for labels
         if my_network.activation == 'softmax':
             train_trgt = to_categorical(train_trgt, num_classes = my_network.num_class)
+            original_test_trgt = test_trgt
             test_trgt = to_categorical(test_trgt, num_classes = my_network.num_class)
                 
         print('\nTRAIN DATASET PERMUTED size: ',np.shape(train_data))
@@ -82,9 +85,10 @@ def train_model(config, START_TIME, net_depth, SALIENCY, DILATION, restore_dir, 
        
         # Train network
         my_network.train(train_data, train_trgt, 0.2, config.num_epochs, config.batch_size, [reduce_lr,  test_callback, tensorboard])
+        
         ## Save Results
         elapsed_times_all[b_id] = timer() - one_timer
         my_network.save_statistic_results(saving_dir, elapsed_times_all)
-        #my_network.save_img_results(saving_dir, test_data, test_trgt)
+        my_network.save_img_results(saving_dir, test_data, original_test_trgt)
         
         my_netowrk = None

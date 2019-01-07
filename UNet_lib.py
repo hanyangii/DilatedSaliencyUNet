@@ -22,6 +22,8 @@ from keras.losses import mean_squared_error, categorical_crossentropy
 from keras.metrics import categorical_accuracy, binary_accuracy
 from keras.utils import to_categorical
 
+from tensorflow.python.ops import nn
+
 class LossHistory(keras.callbacks.Callback):
     def on_train_begin(self, logs={}):
         self.losses = []
@@ -211,8 +213,8 @@ def dice_coef(y_true, y_pred, ismetric=True, smooth=1e-7):
         y_true = tf.cast(K.greater_equal(y_true, 2), tf.float32)
         y_pred = tf.cast(K.greater_equal(y_pred, 2), tf.float32)
     else:
-        y_pred = y_pred[:,:,:,1]
-        y_true = y_true[:,:,:,1]
+        y_pred = y_pred[:,:,:,-1]
+        y_true = y_true[:,:,:,-1]
     
     y_true_f = tf.cast(K.flatten(y_true), tf.float32)
     y_pred_f = tf.cast(K.flatten(y_pred), tf.float32)
@@ -227,7 +229,7 @@ def dice_coef(y_true, y_pred, ismetric=True, smooth=1e-7):
     
 # https://github.com/jocicmarko/ultrasound-nerve-segmentation/blob/master/train.py#L19
 def dice_coef_loss(y_true, y_pred):
-    return -dice_coef(y_true, y_pred, ismetric = False)
+    return -dice_coef(y_true, y_pred, ismetric = False) + nn.softmax_cross_entropy_with_logits_v2(labels = y_true, logits = y_pred)
 
 
 def Saliency_Slice_UNet(layer_level, batch_norm, flair_shape, iam_shape, Loss, activation, lr, num_class=1, num_chn = 2, PRETRAIN=False, BG=False):
