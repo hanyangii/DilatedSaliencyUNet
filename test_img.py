@@ -10,7 +10,7 @@ from keras import backend as K
 
 from utils import set_parser, TrainConfig
 from data import generate_patch_data, generate_slice_data
-from train import train_model
+from train import test_model
 
 START_TIME = time.strftime('%Y%m%d-%H%M', time.gmtime())
 
@@ -46,24 +46,17 @@ if __name__ == '__main__':
     #net_name = args.dir_name+'_'+patch_size
     
     ''' Load Data '''
-    train_config_dir = 'data/com_test_configs_2fold_adni60'
     test_config_dir = 'data/com_test_configs_2fold_adni60'
     
     restore_weights_path = 'results/basic_experiments_9/'
     
     win_shape = (img_x, img_y, img_z)
 
-    print("Reading TRAIN data..")
-    train_data, train_trgt = generate_patch_data(train_config_dir, 0, TRSH, win_shape, random_num, data_chn_num, args.test)    
-    
     print("Reading TEST data..")
-    test_data, test_trgt = generate_slice_data(test_config_dir, 1, random_num, data_chn_num, args.test)
+    test_data, test_trgt, label_list = generate_slice_data(test_config_dir, 1, random_num, data_chn_num, args.test)
       
-    print(train_data.shape, ' class max val:',np.max(train_trgt))
-
     # Reshape datat to 4-dims
     # Data Order [FLAIR, IAM, T1W]
-    train_data = [np.expand_dims(train_data[:,:,:,i], axis=3) for i in range(data_chn_num)]
     test_data = [np.expand_dims(test_data[:,:,:,i], axis=3) for i in range(data_chn_num)]
     
     
@@ -71,12 +64,9 @@ if __name__ == '__main__':
     train_config = TrainConfig(args)
     
     # U-Net (only FLAIR)
-    
-    train_dat = [train_data[0], train_trgt]
-    test_dat = [test_data[0], test_trgt]
-    train_model(train_config,START_TIME, net_depth=3, SALIENCY=False, DILATION=False, 
-                restore_dir=restore_weights_path+'UNet_depth3_FLAIR_20181219-2345_UNet_depth3_ep80_0/train_models.h5', net_type='UNet_depth3_FLAIR', train_dat=train_dat, test_dat=test_dat)
-    
+    test_model(train_config,test_data[0], test_trgt, net_depth=3, SALIENCY=False, DILATION=False, 
+                restore_dir=restore_weights_path+'UNet_depth3_FLAIR_20181219-2345_UNet_depth3_ep80_0/train_models.h5', net_type='UNet_depth3_FLAIR',label_list=label_list)
+    '''
     # U-Net (only IAM)
     K.clear_session()
     sess = tf.Session(config=config)
@@ -96,7 +86,7 @@ if __name__ == '__main__':
     test_dat = [test_dat, test_trgt]
     train_model(train_config,START_TIME, net_depth=3, SALIENCY=False, DILATION=False, 
                 restore_dir=restore_weights_path+'F+I_20181220-1123_UNet_depth3_ep80_0/train_models.h5', net_type='F+I', train_dat=train_dat, test_dat=test_dat)
-    '''
+    
     # U-Net (FLAIR + IAM + T1w)
     K.clear_session()
     sess = tf.Session(config=config)
@@ -108,7 +98,7 @@ if __name__ == '__main__':
     train_model(train_config,START_TIME, net_depth=3, SALIENCY=False, DILATION=False, 
                 restore_dir=None, net_type='All', train_dat=train_dat, test_dat=test_dat)
     
-    '''
+    
     # Saliency U-Net (FLAIR+IAM)
     K.clear_session()
     sess = tf.Session(config=config)
@@ -117,7 +107,7 @@ if __name__ == '__main__':
     test_dat = [test_data[0:2], test_trgt]
     train_model(train_config,START_TIME, net_depth=3, SALIENCY=True, DILATION=False, 
                 restore_dir=restore_weights_path+'F+I_20181220-1123_Saliency_UNet_ep80_0/train_models.h5', net_type='F+I', train_dat=train_dat, test_dat=test_dat)
-    '''
+    
     # Saliency U-Net (FLAIR+IAM+T1w)
     K.clear_session()
     sess = tf.Session(config=config)
@@ -126,7 +116,7 @@ if __name__ == '__main__':
     test_dat = [test_data, test_trgt]
     train_model(train_config,START_TIME, net_depth=3, SALIENCY=True, DILATION=False, 
                 restore_dir=None, net_type='All', train_dat=train_dat, test_dat=test_dat)
-     '''
+     
     # Dilated Saliency U-Net (FLAIR + IAM)
     #restore_weights_path+'F+I_20181220-1123_Dilated_Saliency_UNet_ep80_0/train_models.h5'
     K.clear_session()
@@ -137,7 +127,7 @@ if __name__ == '__main__':
     train_model(train_config,START_TIME, net_depth=3, SALIENCY=True, DILATION=True, 
                 restore_dir=restore_weights_path+'F+I_20181220-1123_Dilated_Saliency_UNet_ep80_0/train_models.h5', net_type='F+I', train_dat=train_dat, test_dat=test_dat)
     
-    '''
+    
     # Dilated Saliency U-Net (FLAIR + IAM + T1w)
     K.clear_session()
     sess = tf.Session(config=config)

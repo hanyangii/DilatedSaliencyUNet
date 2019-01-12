@@ -5,9 +5,11 @@ matplotlib.use('agg')
 import matplotlib.pyplot as plt
 import scipy.io as sio
 import numpy as np
+import nibabel as nib
 import tensorflow as tf
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from math import sqrt
+from random import randint
 
 import keras
 from keras.backend.tensorflow_backend import set_session
@@ -32,6 +34,7 @@ class Net_Model:
         self.num_modal = num_modal
         self.num_chn = num_chn
         self.train_setting(Loss)
+        self.init_epoch = 0
         
         if DILATION and SALIENCY:
             self.model = Dilated_Saliency_UNet(input_shape, num_modal, num_class, lr, self.loss, self.activation)
@@ -131,8 +134,6 @@ class Net_Model:
                 chn = self.input_shape[-1]
                 input_img = array_ops.squeeze(input_i)
                 img = input_img[0,:,:]
-                #img = array_ops.transpose(img, perm=[2,0,1])
-                #img = tf.concat([img[0],img[1]],axis=1)
                 img = tf.expand_dims(img, 0)
                 if chn > 1:
                     for i in range(chn):
@@ -156,6 +157,7 @@ class Net_Model:
                 
                 output_name = layer.name.replace(':','_')
                 output_img = array_ops.squeeze(output)
+                
                 # pick the output of one slice
                 output_img = output_img[0,:,:,:]
                 output_img = tf.expand_dims(output_img, 0)
@@ -163,12 +165,13 @@ class Net_Model:
                 tf_summary.image(output_name, output_img)
                 
             elif idx == len(self.model.layers)-1:
+                trgt = self.model.inputs[-1]
                 output = layer.output
                 output_name = layer.name.replace(':','_')
                 output_img = array_ops.squeeze(output)
                 output_img = output_img[0,:,:,:]
                 output_img = array_ops.transpose(output_img, perm=[2,0,1])
-                output_img = tf.concat([output_img[0],output_img[1],output_img[2]], axis=1)
+                output_img = tf.concat([output_img[0],output_img[1],output_img[2], trgt[0,:,:,0]], axis=1)
                 img = tf.expand_dims(output_img, 0)
                 img = tf.expand_dims(img, 3)
                 tf_summary.image(output_name, img)
@@ -179,12 +182,13 @@ class Net_Model:
     def initialize(self):
         keras.backend.get_session().run(tf.global_variables_initializer())
     
-    def train(self, train_data, train_trgt, val_split, epochs, nb_samples, callbacks):
+    def train(self, train_data, train_trgt, valid_data, valid_trgt, epochs, nb_samples, callbacks):
         print('Metrics : ', self.model.metrics_names)
 
         self.history_callback = self.model.fit(x = train_data, 
                                         y = train_trgt,
-                                        validation_split=val_split,
+                                        validation_data=[valid_data, valid_trgt],
+                                        initial_epoch=self.init_epoch,
                                         epochs=epochs,
                                         batch_size=nb_samples,
                                         shuffle=True,
@@ -204,7 +208,33 @@ class Net_Model:
         test_pred_img = self.model.predict(test_data_img, verbose=1)
         
         return test_data_img, test_trgt_img, test_pred_img
+    
+    
+    
+    def test_result_store(self, test_data, test_trgt):
+        test_pred_img = self.model.predict(test_data_img, verbose=1)
+        if test_pred_img.shape[-1]>1:
+            test_pred_img = (np.argmax(test_pred_img, axis=2)).astype(np.int16)
+        else:
+            test_pred_img = (test_pred_img[:,:,0].astype(np.int16))
         
+        #Calculate Dice Score
+        dice_score = []
+        for idx in range(test_pred_img.shape[0]):
+            gt = test_trgt[idx,:,:,:]
+            pred = test_pred_img[idx,:,:,:]
+            wmh_ratio = np.sum(np.where(gt==2,1,0))/np.sum(np.where(gt>0,1,0))
+            
+            gt = np.where(gt==2, 1, 0)
+            pred = np.where(pred==2, 1, 0)
+            dice_score = (2. * np.sum(gt*pred) + 1e-7) / (np.sum(gt) + np.sum(pred) + 1e-7)
+            dice_score.append((wmh_ratio, dice_score))
+        
+        
+        return dice_score, pred
+    
+                              
+                              
     def save_statistic_results(self, saving_dir, elapsed_times_all):
         ## SAVE ELAPSED TIME
         #f = open(saving_dir+'history_elapsedTime.txt', 'ab')
@@ -224,7 +254,8 @@ class Net_Model:
             np.savetxt(f,numpy_history)
             f.close()
     
-    def save_img_results(self, saving_dir, test_data, test_trgt):
+    def save_img_results(self, saving_dir, test_data, test_trgt, epochs):
+        self.init_epoch = epochs
         sh = np.shape(test_data)
         num_chn = self.input_shape[-1]
         test_data_img = []
@@ -237,17 +268,24 @@ class Net_Model:
             for i in range(10):
                 idx = 20+35*i
                 if idx >= sh[1]: break
+                gt_num = np.sum(np.where(test_trgt[idx]==2))
+                if gt_num == 0: 
+                    while True:
+                        idx = randint(0, len(test_trgt)-1)
+                        gt_num = np.sum(np.where(test_trgt[idx]==2))
+                        if gt_num > 0 : break
+                print('Slice ',i,' Number of WMH voxels: GT - ',gt_num)    
                 test_data_img.append(test_data[:,idx,:,:,:])
                 test_trgt_img.append(test_trgt[idx])
                 slice_num = i+1
-                print('Slice ',i,' Number of WMH voxels: GT - ',np.sum(np.where(test_trgt[idx]==2)))
+               
             
             test_data_input = np.array(test_data_img)
             test_data_input = np.swapaxes(test_data_input, 0, 1)
             test_data_input = list(test_data_input)
         else:
             for i in range(10):
-                idx = 20+35*i
+                idx = 20+34*i
                 if idx >= len(test_data): break
                 test_data_img.append(test_data[idx])
                 test_trgt_img.append(test_trgt[idx])
@@ -280,13 +318,8 @@ class Net_Model:
 
             for j in range(self.num_modal):
                 if len(shape)>3:
-                    print('ddddd ', j)
                     flair_img = np.squeeze((data_img[j, :,:,:]).astype(np.float))
-                #elif shape[-1]>1:
-                #    print('eeee ', j)
-                #    flair_img = (data_img[:,:,j]).astype(np.float)
                 else:
-                    print('ffff ', j)
                     flair_img = data_img[:,:,j].astype(np.float)
                 cmap='gray'
                 if j==1 : cmap='jet'
@@ -317,7 +350,7 @@ class Net_Model:
 
             fig_idx = fig_idx+1
 
-        fig.savefig(saving_dir+'test_result_img.png')
+        fig.savefig(saving_dir+'test_result_img_ep'+str(epochs)+'.png')
         
 
     def layer_init(self, init_num):

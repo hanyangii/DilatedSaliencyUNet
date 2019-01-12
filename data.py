@@ -193,7 +193,7 @@ def generate_slice_data(config_dir, b_id, random_num, num_chn, TEST):
         test_data = np.concatenate((test_data, test_iam, test_T1w), axis=3)
     test_trgt = np.reshape(test_trgt, (va, vb, vc, 1))
     
-    return test_data, test_trgt
+    return test_data, test_trgt, data_list_l
 
 def generate_patch_data(config_dir, b_id, TRSH, win_shape, random_num, num_chn, TEST):
     # LOAD TRAINING DATA
