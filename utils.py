@@ -1,4 +1,33 @@
 import keras
+from keras.layers import Layer
+import tensorflow as tf
+
+class Padding(Layer):
+    '''
+       Keras padding layer including symmetric, zero, reflect modes. 
+       The mode value is same as tf.pad mode. 
+       ("CONSTANT", "REFLECT", "SYMMETRIC") 
+    '''
+    def __init__(self, kernel_size, dilation, mode, **kwargs):
+        self.kernel_size = kernel_size
+        self.dilation = dilation
+        self.mode = mode
+        super(Padding, self).__init__(**kwargs)
+
+    def build(self, input_shape):
+        
+        super(Padding, self).build(input_shape)  # Be sure to call this at the end
+
+    def call(self, x):
+        pad = [int(((self.kernel_size[0]-1)*self.dilation)/2),int(((self.kernel_size[1]-1)*self.dilation)/2)] 
+        paddings = tf.constant([[0,0],[pad[0], pad[0]], [pad[1], pad[1]],[0,0]])
+        return tf.pad(x, paddings, self.mode)
+
+    def compute_output_shape(self, input_shape):
+        #input_shape[1] = input_shape[1]+self.kernel_size[0]
+        #input_shape[2] = input_shape[2]+self.kernel_size[1]
+        return input_shape
+
 
 class TestCallback(keras.callbacks.Callback):
     
@@ -20,6 +49,10 @@ class TestCallback(keras.callbacks.Callback):
             self.test_accuracy.append(metrics[1])
             self.test_dicecoef.append(metrics[2])
             print('Testing loss: {}, categorical-acc: {}, dice-coef: {}\n'.format(metrics[0], metrics[1], metrics[2]))
+            
+            if len(self.test_dicecoef) == 1 or (self.test_dicecoef[-2] < self.test_dicecoef[-1]):
+                self.model.save_weights(self.save_dir+'best_train_models.h5')
+                
     
     def on_train_end(self, logs={}):
         with open(self.save_dir+'test_loss.txt',"w") as n:
@@ -46,6 +79,8 @@ class TrainConfig(object):
         self.n_class = 3
         self.reduce_lr_factor = args.reduce_lr_factor
         self.reduce_lr_patience = args.reduce_lr_patience
+        self.dir_name = args.dir_name
+        self.interim_vis = args.interim_vis
 
 def set_parser(parser):
     # Arguments for training
@@ -74,6 +109,7 @@ def set_parser(parser):
     parser.add_argument('--Patch', dest='Patch', action='store_true', default=True)
     parser.add_argument('--Slice',dest='Patch', action='store_false')
     parser.add_argument('--visualisation', dest='visualisation', action='store_true', default=False)
+    parser.add_argument('--interim_vis', dest='interim_vis', action='store_true', default=False)
     
     return parser
     

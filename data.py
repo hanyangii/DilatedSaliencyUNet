@@ -193,7 +193,7 @@ def generate_slice_data(config_dir, b_id, random_num, num_chn, TEST):
         test_data = np.concatenate((test_data, test_iam, test_T1w), axis=3)
     test_trgt = np.reshape(test_trgt, (va, vb, vc, 1))
     
-    return test_data, test_trgt
+    return test_data, test_trgt, data_list_l
 
 def generate_patch_data(config_dir, b_id, TRSH, win_shape, random_num, num_chn, TEST):
     # LOAD TRAINING DATA
@@ -331,7 +331,7 @@ def generate_patch_data(config_dir, b_id, TRSH, win_shape, random_num, num_chn, 
                                                     'constant', constant_values=0)
                 block_vessel_labelled = view_as_windows(vessel_labelled_padded, win_shape)
 
-                num_augment = 2
+                num_augment = 1
                 train_dat = np.zeros((len(not_yet_labelled)*num_augment,win_shape[0],win_shape[1],num_chn))
 
                 targt_dat = np.zeros((len(not_yet_labelled)*num_augment,win_shape[0],win_shape[1],1))
@@ -389,6 +389,6 @@ def generate_patch_data(config_dir, b_id, TRSH, win_shape, random_num, num_chn, 
             if TEST and len(train_data)>100: break
             id += 1
 
-    return train_data, train_trgt 
+    return train_data, train_trgt, data_list_lbl 
 
 
