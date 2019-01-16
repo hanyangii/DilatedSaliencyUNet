@@ -297,7 +297,7 @@ class Net_Model:
             test_data_input = list(test_data_input)
         else:
             for i in range(10):
-                idx = 20+34*i
+                idx = 20+35*i
                 if idx >= len(test_data): break
                 test_data_img.append(test_data[idx])
                 test_trgt_img.append(test_trgt[idx])

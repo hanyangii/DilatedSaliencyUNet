@@ -54,10 +54,10 @@ if __name__ == '__main__':
     win_shape = (img_x, img_y, img_z)
 
     print("Reading TRAIN data..")
-    train_data, train_trgt = generate_patch_data(train_config_dir, 0, TRSH, win_shape, random_num, data_chn_num, args.test)    
+    train_data, train_trgt, train_list = generate_patch_data(train_config_dir, 0, TRSH, win_shape, random_num, data_chn_num, args.test)    
     
     print("Reading TEST data..")
-    test_data, test_trgt = generate_slice_data(test_config_dir, 1, random_num, data_chn_num, args.test)
+    test_data, test_trgt, target_list = generate_slice_data(test_config_dir, 1, random_num, data_chn_num, args.test)
       
     print(train_data.shape, ' class max val:',np.max(train_trgt))
 
@@ -69,13 +69,13 @@ if __name__ == '__main__':
     
     ''' Train Networks'''
     train_config = TrainConfig(args)
-    
+    '''
     # U-Net (only FLAIR)
     
     train_dat = [train_data[0], train_trgt]
     test_dat = [test_data[0], test_trgt]
     train_model(train_config,START_TIME, net_depth=3, SALIENCY=False, DILATION=False, 
-                restore_dir=restore_weights_path+'UNet_depth3_FLAIR_20181219-2345_UNet_depth3_ep80_0/train_models.h5', net_type='UNet_depth3_FLAIR', train_dat=train_dat, test_dat=test_dat)
+                restore_dir=None, net_type='UNet_depth3_FLAIR', train_dat=train_dat, test_dat=test_dat)
     
     # U-Net (only IAM)
     K.clear_session()
@@ -83,12 +83,7 @@ if __name__ == '__main__':
     K.set_session(sess)
     train_dat = [train_data[1], train_trgt]
     test_dat = [test_data[1], test_trgt]
-    train_model(train_config,START_TIME, net_depth=3, SALIENCY=False, DILATION=False, 
-<<<<<<< HEAD
-                restore_dir=None, net_type='IAM', train_dat=train_dat, test_dat=test_dat)
-=======
-                restore_dir=restore_weights_path+'IAM_20181219-2345_UNet_depth3_ep80_0/train_models.h5', net_type='IAM', train_dat=train_dat, test_dat=test_dat)
->>>>>>> a182cec4f926756a13db40f76c43cd24ab479ed2
+    train_model(train_config,START_TIME, net_depth=3, SALIENCY=False, DILATION=False, restore_dir=None, net_type='IAM', train_dat=train_dat, test_dat=test_dat)
     
     # U-Net (FLAIR + IAM)
     K.clear_session()
@@ -99,8 +94,8 @@ if __name__ == '__main__':
     train_dat = [train_dat, train_trgt]
     test_dat = [test_dat, test_trgt]
     train_model(train_config,START_TIME, net_depth=3, SALIENCY=False, DILATION=False, 
-                restore_dir=restore_weights_path+'F+I_20181220-1123_UNet_depth3_ep80_0/train_models.h5', net_type='F+I', train_dat=train_dat, test_dat=test_dat)
-    '''
+                restore_dir=None, net_type='F+I', train_dat=train_dat, test_dat=test_dat)
+    
     # U-Net (FLAIR + IAM + T1w)
     K.clear_session()
     sess = tf.Session(config=config)
@@ -111,24 +106,27 @@ if __name__ == '__main__':
     test_dat = [test_dat, test_trgt]
     train_model(train_config,START_TIME, net_depth=3, SALIENCY=False, DILATION=False, 
                 restore_dir=None, net_type='All', train_dat=train_dat, test_dat=test_dat)
-<<<<<<< HEAD
-=======
+
     
->>>>>>> a182cec4f926756a13db40f76c43cd24ab479ed2
-    '''
     # Saliency U-Net (FLAIR+IAM)
     K.clear_session()
     sess = tf.Session(config=config)
     K.set_session(sess)
     train_dat = [train_data[0:2], train_trgt]
     test_dat = [test_data[0:2], test_trgt]
-    train_model(train_config,START_TIME, net_depth=3, SALIENCY=True, DILATION=False, 
-<<<<<<< HEAD
-                restore_dir=None, net_type='F+I', train_dat=train_dat, test_dat=test_dat)
-=======
-                restore_dir=restore_weights_path+'F+I_20181220-1123_Saliency_UNet_ep80_0/train_models.h5', net_type='F+I', train_dat=train_dat, test_dat=test_dat)
->>>>>>> a182cec4f926756a13db40f76c43cd24ab479ed2
-    '''
+    train_model(train_config,START_TIME, net_depth=3, SALIENCY=True, DILATION=False, restore_dir=None, net_type='F+I', train_dat=train_dat, test_dat=test_dat)
+
+
+   '''
+    # Dilated Saliency U-Net (FLAIR + IAM)
+    #restore_weights_path+'F+I_20181220-1123_Dilated_Saliency_UNet_ep80_0/train_models.h5'
+    K.clear_session()
+    sess = tf.Session(config=config)
+    K.set_session(sess)
+    train_dat = [train_data[0:2], train_trgt]
+    test_dat = [test_data[0:2], test_trgt]
+    train_model(train_config,START_TIME, net_depth=3, SALIENCY=True, DILATION=True, restore_dir=None, net_type='F+I', train_dat=train_dat, test_dat=test_dat)
+    '''    
     # Saliency U-Net (FLAIR+IAM+T1w)
     K.clear_session()
     sess = tf.Session(config=config)
@@ -137,27 +135,8 @@ if __name__ == '__main__':
     test_dat = [test_data, test_trgt]
     train_model(train_config,START_TIME, net_depth=3, SALIENCY=True, DILATION=False, 
                 restore_dir=None, net_type='All', train_dat=train_dat, test_dat=test_dat)
-<<<<<<< HEAD
-    '''
-    # Dilated Saliency U-Net (FLAIR + IAM)
-=======
-     '''
-    # Dilated Saliency U-Net (FLAIR + IAM)
-    #restore_weights_path+'F+I_20181220-1123_Dilated_Saliency_UNet_ep80_0/train_models.h5'
->>>>>>> a182cec4f926756a13db40f76c43cd24ab479ed2
-    K.clear_session()
-    sess = tf.Session(config=config)
-    K.set_session(sess)
-    train_dat = [train_data[0:2], train_trgt]
-    test_dat = [test_data[0:2], test_trgt]
-    train_model(train_config,START_TIME, net_depth=3, SALIENCY=True, DILATION=True, 
-<<<<<<< HEAD
-                restore_dir=None, net_type='F+I', train_dat=train_dat, test_dat=test_dat)
-=======
-                restore_dir=restore_weights_path+'F+I_20181220-1123_Dilated_Saliency_UNet_ep80_0/train_models.h5', net_type='F+I', train_dat=train_dat, test_dat=test_dat)
     
->>>>>>> a182cec4f926756a13db40f76c43cd24ab479ed2
-    '''
+    
     # Dilated Saliency U-Net (FLAIR + IAM + T1w)
     K.clear_session()
     sess = tf.Session(config=config)
@@ -166,8 +145,8 @@ if __name__ == '__main__':
     test_dat = [test_data, test_trgt]
     train_model(train_config,START_TIME, net_depth=3, SALIENCY=True, DILATION=True, 
                 restore_dir=None, net_type='All', train_dat=train_dat, test_dat=test_dat)
-    '''
     
+    '''
     # Clear memory
     train_trgt = None
     test_trgt  = None

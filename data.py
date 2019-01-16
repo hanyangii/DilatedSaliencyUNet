@@ -12,7 +12,6 @@ from PIL import Image
 from skimage.util.shape import view_as_windows
 from skimage.transform import AffineTransform, warp
 from timeit import default_timer as timer
-
 class load_data(object):
     # Load NII data
     def __init__(self, image_name):
@@ -331,7 +330,7 @@ def generate_patch_data(config_dir, b_id, TRSH, win_shape, random_num, num_chn, 
                                                     'constant', constant_values=0)
                 block_vessel_labelled = view_as_windows(vessel_labelled_padded, win_shape)
 
-                num_augment = 1
+                num_augment = 2
                 train_dat = np.zeros((len(not_yet_labelled)*num_augment,win_shape[0],win_shape[1],num_chn))
 
                 targt_dat = np.zeros((len(not_yet_labelled)*num_augment,win_shape[0],win_shape[1],1))

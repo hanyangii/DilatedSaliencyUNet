@@ -15,7 +15,6 @@ from keras.losses import mean_squared_error, categorical_crossentropy
 from keras.metrics import categorical_accuracy, binary_accuracy
 
 from UNet_lib import dice_coef
-from utils import Padding
 
 class UNet:
     def __init__(self, input_shape, depth, lr, loss, activation):
@@ -29,39 +28,41 @@ class UNet:
     def building_net(self, input_shape, depth, num_class, activation):
         conv = inputs = Input(input_shape, name='input_layer')
         conv_stack = []
+        depth_stack = []
         
         ## Encoding Part
         for d in range(depth):
             if d == 0: filter_size = (5,5)
             else: filter_size=(3,3)
                 
-            conv = self.conv_block('relu', 64*(d+1), filter_size, conv, padding="CONSTANT", depth_num=str(d)+'_0')
-            conv = self.conv_block('relu', 64*(d+1), filter_size, conv, padding="CONSTANT", depth_num=str(d)+'_1')
+            conv = self.conv_block('relu', 64*(2**d), filter_size, conv, padding="CONSTANT", depth_num=str(d)+'_0')
+            conv = self.conv_block('relu', 64*(2**d), filter_size, conv, padding="CONSTANT", depth_num=str(d)+'_1')
             conv_stack.append(conv)
+            depth_stack.append(64*(2**d))
             conv = MaxPooling2D(pool_size=(2,2), name='maxpool2d_'+str(d))(conv)
         
         ## Decoding Part
         for d in range(depth, 2*depth+1):
-            conv = self.conv_block('relu', 64*(d+1), (3,3), conv, padding="CONSTANT", depth_num=str(d)+'_0')
+            if d == depth: cur_depth = 64*(2**d)
+            else: cur_depth = depth_stack.pop()
+            conv = self.conv_block('relu', cur_depth , (3,3), conv, padding="CONSTANT", depth_num=str(d)+'_0')
             conv = Dropout(0.25, name='do_'+str(d))(conv)
-            conv = self.conv_block('relu', 64*(d+1), (3,3), conv, padding="CONSTANT", depth_num=str(d)+'_1')
+            conv = self.conv_block('relu', cur_depth , (3,3), conv, padding="CONSTANT", depth_num=str(d)+'_1')
             if d == 2*depth: break
             conv = UpSampling2D(size=(2,2), name='up2d_'+str(d))(conv)
             conv = concatenate([conv, conv_stack.pop()], axis=-1, name='concat_'+str(d))
         
         ## Fully Connected
-        conv = Padding(kernel_size = (1,1), dilation=1, mode = "CONSTANT", name='padding'+str(depth*2))(conv)
-        fconv = Conv2D(num_class, (1,1), activation=activation, name='conv2d_'+str(depth*2))(conv)
+        fconv = Conv2D(num_class, (1,1), activation=activation, padding="same", name='conv2d_'+str(depth*2))(conv)
         
         model = Model(input=inputs, output=fconv)
         
         return model
     
     def conv_block(self, activation, filters, filter_size, input_layer, depth_num, padding, modal_name="", dilation=1):
-        conv = Padding(kernel_size = filter_size, dilation = dilation, mode = padding, name = padding+'_padding_'+modal_name+depth_num)(input_layer)
         conv = Conv2D(filters, filter_size,
-                      name='conv2d_'+modal_name+depth_num,
-                      dilation_rate = dilation)(conv)
+                      name='conv2d_'+modal_name+depth_num, padding="same",
+                      dilation_rate = dilation)(input_layer)
         conv = BatchNormalization(name='bn_'+modal_name+depth_num)(conv)
         if activation=='relu':
             conv = ReLU(name='relu_'+modal_name+depth_num)(conv)
@@ -115,8 +116,7 @@ class Saliency_UNet(UNet):
         conv = self.decoder_block([conv]+skip_layers1, 64, (3,3), 4, False)
         
         ## Fully Connected
-        conv = Padding(kernel_size = (1,1), dilation = 1, mode = "CONSTANT", name='padding_5')(conv)
-        fconv = Conv2D(num_class, (1,1), activation=activation, name='conv2d_5')(conv)
+        fconv = Conv2D(num_class, (1,1), activation=activation, padding="same", name='conv2d_5')(conv)
         
         model = Model(input=inputs, output=fconv)
         
@@ -183,8 +183,7 @@ class Noppoling_Dilated_Saliency_UNet(UNet):
         
         ## Fully Connected
         #conv = super().conv_block('relu', 256, (3,3), conv, depth_num='5_0_d1', dilation=1)
-        conv = Padding(kernel_size = (1,1), dilation = 1, mode = "CONSTANT", name='padding_5')(conv)
-        fconv = Conv2D(num_class, (1,1), activation=activation, name='conv2d_5')(conv)
+        fconv = Conv2D(num_class, (1,1), activation=activation, padding="same", name='conv2d_5')(conv)
         
         model = Model(input=inputs, output=fconv)
         
