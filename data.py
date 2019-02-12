@@ -12,6 +12,7 @@ from PIL import Image
 from skimage.util.shape import view_as_windows
 from skimage.transform import AffineTransform, warp
 from timeit import default_timer as timer
+
 class load_data(object):
     # Load NII data
     def __init__(self, image_name):
@@ -22,7 +23,6 @@ class load_data(object):
         self.image = image
         self.affine = affine
         self.dt = nim.header['pixdim'][4]
-
 
 def data_prep(image_data):
     # Extract the 2D slices from the cardiac data
@@ -45,18 +45,6 @@ def data_prep_noSwap(image_data):
     images = np.array(images, dtype='float32')
 
     return images
-
-def data_augmentation(image):
-    flip1 = np.flip(image, 1)
-    flip2 = np.flip(image, 2)
-    
-    #Rotation
-    rotation1 = np.rot90(image, k=1, axes=[0,1])
-    rotation2 = np.rot90(image, k=3, axes=[0,1])
-    
-    augmented_data = np.concatenate([image, flip1, flip2, rotation1, rotation2], axis=2)
-    #print(np.shape(augmented_data))
-    return augmented_data
     
 def normalisation(image, mask):
     val_img = image[np.where(mask>0)]
@@ -125,7 +113,7 @@ def generate_slice_data(config_dir, b_id, random_num, num_chn, TEST):
     for line in f:
         data_list_a.append(line)
     data_list_a = list(map(lambda s: s.strip('\n'), data_list_a))
-
+    affine_list = []
     id = 0
     test_data = []
     test_trgt = []
@@ -137,6 +125,8 @@ def generate_slice_data(config_dir, b_id, random_num, num_chn, TEST):
             loaded_data_l = load_data(data_list_l[id])
             loaded_data_c = load_data(data_list_c[id])
             loaded_data_a = load_data(data_list_a[id])
+            
+            affine_list.append(loaded_data_l.affine)
 
             loaded_image_f = data_prep(loaded_data_f)
             loaded_image_T1w = data_prep(loaded_data_T1w)
@@ -192,7 +182,7 @@ def generate_slice_data(config_dir, b_id, random_num, num_chn, TEST):
         test_data = np.concatenate((test_data, test_iam, test_T1w), axis=3)
     test_trgt = np.reshape(test_trgt, (va, vb, vc, 1))
     
-    return test_data, test_trgt, data_list_l
+    return test_data, test_trgt, data_list_l, affine_list
 
 def generate_patch_data(config_dir, b_id, TRSH, win_shape, random_num, num_chn, TEST):
     # LOAD TRAINING DATA

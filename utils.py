@@ -1,33 +1,7 @@
-import keras
+import keras 
+from keras import backend as K
 from keras.layers import Layer
 import tensorflow as tf
-
-class Padding(Layer):
-    '''
-       Keras padding layer including symmetric, zero, reflect modes. 
-       The mode value is same as tf.pad mode. 
-       ("CONSTANT", "REFLECT", "SYMMETRIC") 
-    '''
-    def __init__(self, kernel_size, dilation, mode, **kwargs):
-        self.kernel_size = kernel_size
-        self.dilation = dilation
-        self.mode = mode
-        super(Padding, self).__init__(**kwargs)
-
-    def build(self, input_shape):
-        
-        super(Padding, self).build(input_shape)  # Be sure to call this at the end
-
-    def call(self, x):
-        pad = [int(((self.kernel_size[0]-1)*self.dilation)/2),int(((self.kernel_size[1]-1)*self.dilation)/2)] 
-        paddings = tf.constant([[0,0],[pad[0], pad[0]], [pad[1], pad[1]],[0,0]])
-        return tf.pad(x, paddings, self.mode)
-
-    def compute_output_shape(self, input_shape):
-        #input_shape[1] = input_shape[1]+self.kernel_size[0]
-        #input_shape[2] = input_shape[2]+self.kernel_size[1]
-        return input_shape
-
 
 class TestCallback(keras.callbacks.Callback):
     
@@ -75,13 +49,51 @@ class TrainConfig(object):
         self.Patch = args.Patch
         self.hist_freq = 10 if self.VISUALISATION else 0
         self.loss = args.loss
-        self.fold = args.fold
         self.n_class = 3
         self.reduce_lr_factor = args.reduce_lr_factor
         self.reduce_lr_patience = args.reduce_lr_patience
         self.dir_name = args.dir_name
         self.interim_vis = args.interim_vis
 
+class LossHistory(keras.callbacks.Callback):
+    def on_train_begin(self, logs={}):
+        self.losses = []
+
+    def on_batch_end(self, batch, logs={}):
+        self.losses.append(logs.get('loss'))
+
+def print_options(arg_dict):
+    print('\n======================Training Options======================')
+    for idx in arg_dict:
+        print(idx+': '+str(arg_dict[idx]))
+    print('\n') 
+    
+          
+# https://github.com/jocicmarko/ultrasound-nerve-segmentation/blob/master/train.py#L19
+def dice_coef(y_true, y_pred, ismetric=True, smooth=1e-7):
+    
+    label_num = y_true.shape[-1]
+    if ismetric:
+        y_true = tf.cast(K.argmax(y_true, axis=3), tf.float32)
+        y_pred = tf.cast(K.argmax(y_pred, axis=3), tf.float32)
+        y_true = tf.cast(K.greater_equal(y_true, 2), tf.float32)
+        y_pred = tf.cast(K.greater_equal(y_pred, 2), tf.float32)
+    else:
+        y_pred = y_pred[:,:,:,-1]
+        y_true = y_true[:,:,:,-1]
+    
+    y_true_f = tf.cast(K.flatten(y_true), tf.float32)
+    y_pred_f = tf.cast(K.flatten(y_pred), tf.float32)
+        
+    intersection = K.sum(y_true_f * y_pred_f)
+    return (2. * intersection + smooth) / (K.sum(y_true_f) + K.sum(y_pred_f) + smooth)
+
+    
+# https://github.com/jocicmarko/ultrasound-nerve-segmentation/blob/master/train.py#L19
+def dice_coef_loss(y_true, y_pred):
+    return -dice_coef(y_true, y_pred, ismetric = False) + nn.softmax_cross_entropy_with_logits_v2(labels = y_true, logits = y_pred)
+        
+        
 def set_parser(parser):
     # Arguments for training
     parser.add_argument('--shuffle_epoch', type=bool,default=True)
@@ -91,7 +103,7 @@ def set_parser(parser):
     parser.add_argument('--bn_momentum', type=float, default=0.99)
     parser.add_argument('--TRSH', type=float, default=0.0)
     parser.add_argument('--data_chn_num', type=int, default=3)
-    parser.add_argument('--fold', type=int, default=2)
+    parser.add_argument('--fold', type=int, default=1)
     parser.add_argument('--random_num', type=int, default=500)
     parser.add_argument('--img_size', type=int, default=64)
     parser.add_argument('--batch_norm', dest='batch_norm', action='store_true', default=True)

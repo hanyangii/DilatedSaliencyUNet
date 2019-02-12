@@ -7,8 +7,10 @@ import scipy.io as sio
 import numpy as np
 import nibabel as nib
 import tensorflow as tf
+
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from math import sqrt
+from sklearn import metrics
 from random import randint
 
 import keras
@@ -22,31 +24,30 @@ from keras.losses import categorical_crossentropy
 from tensorflow.python.ops import array_ops
 from tensorflow.python.summary import summary as tf_summary
 
-from UNet import UNet, Saliency_UNet, Dilated_Saliency_UNet, Noppoling_Dilated_Saliency_UNet
-from UNet_lib import dice_coef_loss
+from UNet import UNet, Saliency_UNet, Dilated_Saliency_UNet
+from utils import dice_coef_loss
 
 from timeit import default_timer as timer
 
 
 class Net_Model:
     
-    def __init__(self, layer_level, input_shape, Loss, lr,num_modal, num_chn=3, num_class=2, VISUALISATION=False, SALIENCY=False, DILATION=False):
+    def __init__(self, layer_level, input_shape, Loss, lr,num_modal, num_chn=3, num_class=2, VISUALISATION=False, SALIENCY=False, DILATION=False, dilation_factor=None):
         self.layer_level = layer_level
         self.input_shape = input_shape
         self.num_class = num_class
         self.num_modal = num_modal
         self.num_chn = num_chn
-        self.train_setting(Loss)
+        self.train_setting()
         self.init_epoch = 0
         self.test_time = 0
         
         if DILATION and SALIENCY:
-            self.model = Dilated_Saliency_UNet(input_shape, num_modal, num_class, lr, self.loss, self.activation)
+            self.model = Dilated_Saliency_UNet(input_shape, self.layer_level, num_modal, num_class, lr, self.loss, self.activation, dilation_factor)
             self.net_name ='Dilated_Saliency_UNet'
-            #self.model = Noppoling_Dilated_Saliency_UNet(input_shape, num_modal, num_class, lr, self.loss, self.activation)
-            #self.net_name ='Nopooling_Dilated_Saliency_UNet'
+            
         elif SALIENCY:
-            self.model = Saliency_UNet(input_shape, num_modal, num_class, lr, self.loss, self.activation)
+            self.model = Saliency_UNet(input_shape, self.layer_level, num_modal, num_class, lr, self.loss, self.activation)
             self.net_name ='Saliency_UNet'
         else:
             input_shape = list(input_shape)
@@ -60,34 +61,19 @@ class Net_Model:
         if VISUALISATION: 
             self.visualise()
                 
-    def train_setting(self, Loss):
-        if Loss == 'crossentropy':
-            self.loss = categorical_crossentropy
-            self.activation = 'softmax'
-            self.num_class = 3
-        elif Loss == 'dice_coef':
-            self.loss = dice_coef_loss
-            self.activation = 'sigmoid'
-        elif Loss == 'gdl':
-            self.loss = GDL
-            self.activation = 'sigmoid'
-        elif Loss == 'iou':
-            self.loss = iou_loss
-            self.activation = 'softmax'
-            self.num_class = 3
-        elif Loss == 'dice_crossentropy':
-            self.loss = dice_coef_loss
-            self.activation = 'softmax'
-            self.num_class = 3
-        else:
-            print('Loss should be either \'crossentropy\' or \'dice_coef\'')
-            sys.exit(1)
+    def train_setting(self):
+        self.loss = categorical_crossentropy
+        self.activation = 'softmax'
+        self.num_class = 3
+        
         
     def restore(self, weights_path):
         self.model.load_weights(weights_path)
         
         
     def visualise(self):
+        
+        # https://gist.github.com/kukuruza/03731dc494603ceab0c5
         def put_kernels_on_grid (kernel, shape, pad = 1):
             print(shape)
             shape = np.array([shape[1],shape[2],shape[0],shape[3]])
@@ -131,8 +117,8 @@ class Net_Model:
         
         patch_shape = np.array([64, 64])
         prev_layer = None
+        
         for idx, layer in enumerate(self.model.layers):
-            
             if 'input' in layer.name:
                 input_i = layer.input
                 chn = self.input_shape[-1]
@@ -186,12 +172,12 @@ class Net_Model:
     def initialize(self):
         keras.backend.get_session().run(tf.global_variables_initializer())
     
-    def train(self, train_data, train_trgt, valid_data, valid_trgt, epochs, nb_samples, callbacks):
+    def train(self, train_data, train_trgt,epochs, nb_samples, callbacks):
         print('Metrics : ', self.model.metrics_names)
 
         self.history_callback = self.model.fit(x = train_data, 
                                         y = train_trgt,
-                                        validation_data=[valid_data, valid_trgt],
+                                        validation_split=0.2,
                                         initial_epoch=self.init_epoch,
                                         epochs=epochs,
                                         batch_size=nb_samples,
@@ -229,6 +215,7 @@ class Net_Model:
         else:
             test_pred_img = (test_pred_img[:,:,0].astype(np.int16))
         print('Prediction shape: ', test_pred_img.shape)
+        
         #Calculate Dice Score
         dice_score = []
         for idx in range(test_pred_img.shape[0]):
@@ -238,21 +225,18 @@ class Net_Model:
             
             gt = np.where(gt==2, 1, 0)
             pred = np.where(pred==2, 1, 0)
-            dsc = (2. * np.sum(gt*pred)) / (np.sum(gt) + np.sum(pred))
-            var = np.var(np.argwhere(gt>0))
-            dice_score.append((wmh_ratio, wmh_ratio/var,  wmh_ratio*wmh_ratio/var, dsc))
-        
+            gt_n = np.where(gt<2, 1, 0)
+            
+            #auc
+            smooth=1e-7
+            dsc = (2. * np.sum(gt*pred)+smooth) / (np.sum(gt) + np.sum(pred)+smooth)
+            sensitivity = np.sum(gt*pred)/np.sum(gt)
+            fp_rate = np.sum(gt_n*pred)/np.sum(gt_n)
+            dice_score.append((wmh_ratio, sensitivity, fp_rate, dsc))
         
         return dice_score, np.where(test_pred_img==2,1,0)
-    
-                              
-                              
+                           
     def save_statistic_results(self, saving_dir, elapsed_times_all):
-        ## SAVE ELAPSED TIME
-        #f = open(saving_dir+'history_elapsedTime.txt', 'ab')
-        #np.savetxt(f,elapsed_times_all)
-        #f.close()
-
         ## SAVING TRAINED MODEL AND WEIGHTS
         self.model.save_weights(saving_dir+'train_models.h5')
         model_json = self.model.to_json()
@@ -274,7 +258,6 @@ class Net_Model:
         test_trgt_img = []
         slice_num = 0
         
-        print(sh)
         if self.num_chn == 1 and self.num_modal>1: 
             test_data = np.array(test_data)
             for i in range(10):
@@ -290,11 +273,10 @@ class Net_Model:
                 test_data_img.append(test_data[:,idx,:,:,:])
                 test_trgt_img.append(test_trgt[idx])
                 slice_num = i+1
-               
-            
             test_data_input = np.array(test_data_img)
             test_data_input = np.swapaxes(test_data_input, 0, 1)
             test_data_input = list(test_data_input)
+            
         else:
             for i in range(10):
                 idx = 20+35*i
@@ -306,7 +288,6 @@ class Net_Model:
 
             test_data_input = np.array(test_data_img)
             
-        print(np.shape(test_data_input), np.shape(test_data_img))
         test_pred_img = self.model.predict(test_data_input, verbose=1)
         chn = ['FLAIR','IAM', 'T1W']
         
@@ -364,20 +345,6 @@ class Net_Model:
 
         fig.savefig(saving_dir+'test_result_img_ep'+str(epochs)+'.png')
         
-
-    def layer_init(self, init_num):
-        #Initialise layers
-        model_len = len(self.model.layers)-1
-        print('==================== Initialised Layers ======================')
-        session = keras.backend.get_session()
-        for i in range(init_num):
-            idx = i
-            layer = self.model.layers[idx]
-            if hasattr(layer, 'kernel_initializer'):
-                layer.kernel_initializer = lecun_uniform
-                layer.kernel.initializer.run(session=session)
-                print(layer.name)
-    
         
     def summary(self):
         self.model.summary()

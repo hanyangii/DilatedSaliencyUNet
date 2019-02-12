@@ -13,12 +13,10 @@ from keras import backend as K
 
 from timeit import default_timer as timer
 
-from utils import TestCallback
+from utils import TestCallback, LossHistory
 from model import Net_Model
-from UNet_lib import LossHistory
 
-
-def test_model(config, test_data, test_trgt,net_depth, SALIENCY, DILATION, restore_dir, net_type, label_list):
+def test_model(config, test_data, test_trgt,net_depth, SALIENCY, DILATION, restore_dir, net_type, label_list, affine_list, dilation_factor=None):
     if isinstance(test_data, list): 
         num_chn = np.shape(test_data)[-1]
         num_modal = len(test_data)
@@ -35,24 +33,25 @@ def test_model(config, test_data, test_trgt,net_depth, SALIENCY, DILATION, resto
                             num_class=config.n_class,
                             VISUALISATION = config.VISUALISATION,
                             SALIENCY=SALIENCY,
-                            DILATION=DILATION)
+                            DILATION=DILATION,
+                            dilation_factor=dilation_factor)
     
     '''Restore Weights'''
     my_network.restore(restore_dir)
     save_dir = restore_dir.split('train_models.h5')[0]
-    if os.path.exists(save_dir+'predictions'): shutil.rmtree(save_dir+'predictions')
-    os.mkdir(save_dir+'predictions')
+    if os.path.exists(save_dir+'predictions1'): shutil.rmtree(save_dir+'predictions1')
+    os.mkdir(save_dir+'predictions1')
     
     test_trgt = to_categorical(test_trgt, num_classes = my_network.num_class)
     
     '''Test each volume'''
-    
-    with open(save_dir+'/predictions/test_slice_dsc.txt', 'w') as dsc_file:
-        with open(save_dir+'/predictions/brain_dsc.txt', 'w') as brain_dsc_file:
+    with open(save_dir+'/predictions1/test_slice_dsc.txt', 'w') as dsc_file:
+        with open(save_dir+'/predictions1/brain_dsc.txt', 'w') as brain_dsc_file:
             for i, subject in enumerate(label_list):
                 prediction = []
                 subject = subject.split('IAM/')[-1]
                 subject = subject.split('/WMH')[0]
+                affine = affine_list[i]
                 print('Predict : ', subject)
                 for j in range(5):
                     trgt = test_trgt[i*35+7*j:i*35+7*(j+1),:,:,:]
@@ -72,24 +71,30 @@ def test_model(config, test_data, test_trgt,net_depth, SALIENCY, DILATION, resto
                 
                 
                 #Whole Brain DSC Calculation
-                gt = test_trgt[i*35:(i+1)*35,:,:,2]
+                gt = np.where(np.argmax(test_trgt[i*35:(i+1)*35,:,:,:], axis=-1)==2, 1, 0)
                 print('WMH prediction and label data shape : ', np.shape(prediction), np.shape(gt))
+                smooth=1e-7
                 wmh_vol = np.sum(gt)
-                wmh_var = np.var(np.argwhere(gt>0))
-                brain_dsc = (2. * np.sum(gt*prediction)) / (np.sum(gt) + np.sum(prediction))
-                line = str((wmh_vol, wmh_var, wmh_vol/wmh_var, brain_dsc))[1:-1]+'\n'
+                brain_dsc = (2. * np.sum(gt*prediction)+smooth) / (np.sum(gt) + np.sum(prediction)+smooth)
+                
+                #Sensitivity
+                sensitivity = np.sum(gt * prediction)/np.sum(gt)
+                gt_n = (~gt.astype(bool)).astype(float)
+                fp_rate = np.sum(gt_n * prediction)/np.sum(gt_n)
+                
+                line = str((wmh_vol, sensitivity, fp_rate, brain_dsc))[1:-1]+'\n'
                 brain_dsc_file.write(line)
                 
-                
                 prediction = np.moveaxis(prediction, 0, -1)
-                prediction = nib.Nifti1Image(prediction, np.eye(4))
-                nib.save(prediction, save_dir+'predictions/'+subject+'.nii.gz')
+                prediction = nib.Nifti1Image(prediction, affine, nib.Nifti1Header())
+                print('nii data shape: ', prediction.header.get_data_shape())
+                nib.save(prediction, save_dir+'predictions1/'+subject+'.nii.gz')
                 
                 
     print('Total Test Time: ', my_network.test_time)
         
 
-def train_model(config, START_TIME, net_depth, SALIENCY, DILATION, restore_dir, net_type, train_dat, test_dat):
+def train_model(config, START_TIME, net_depth, SALIENCY, DILATION, restore_dir, net_type, train_dat, test_dat, dilation_factor=None):
     
     train_data = train_dat[0]
     train_trgt = train_dat[1]
@@ -115,7 +120,8 @@ def train_model(config, START_TIME, net_depth, SALIENCY, DILATION, restore_dir, 
                                 num_class=config.n_class,
                                 VISUALISATION = config.VISUALISATION,
                                 SALIENCY=SALIENCY,
-                                DILATION=DILATION)
+                                DILATION=DILATION,
+                                dilation_factor=dilation_factor)
         
         net_name = net_type+'_'+START_TIME+'_'+my_network.net_name
         if len(config.dir_name)>0: net_name = net_name+'_'+config.dir_name
@@ -138,36 +144,15 @@ def train_model(config, START_TIME, net_depth, SALIENCY, DILATION, restore_dir, 
             shutil.rmtree(saving_dir)
         os.mkdir(saving_dir)
         
-        # Validation Data
-        split_idx = int(np.shape(train_trgt)[0]*0.8)
-        valid_data = []
-        print(split_idx)
-        if len(np.shape(train_data)) == 4:
-            valid_data = train_data[split_idx:-1 , :, :, :]
-            train_data = train_data[0:split_idx, :, :, :]
-        else:
-            new_train_data = []
-            for modal in train_data:
-                valid_data.append(modal[split_idx:-1 , :, :, :])
-                new_train_data.append(modal[0:split_idx, :, :, :])
-            train_data = new_train_data
-            new_train_data = None
-        valid_trgt = train_trgt[split_idx:-1 , :, :, :]
-        train_trgt = train_trgt[0:split_idx, :, :, :]
-        
         # to_categorical for labels
         if my_network.activation == 'softmax':
             train_trgt = to_categorical(train_trgt, num_classes = my_network.num_class)
             original_test_trgt = test_trgt
             test_trgt = to_categorical(test_trgt, num_classes = my_network.num_class)
-            original_valid_trgt = valid_trgt
-            valid_trgt = to_categorical(valid_trgt, num_classes = my_network.num_class)
             
                 
         print('\nTRAIN DATASET PERMUTED size: ',np.shape(train_data))
         print('\nTRAIN LABEL DATASET PERMUTED size: ',np.shape(train_trgt))
-        print('\VALID DATASET PERMUTED size: ',np.shape(valid_data))
-        print('\VALID LABEL DATASET PERMUTED size: ',np.shape(valid_trgt))
         print('\nTEST DATASET PERMUTED size: ',np.shape(test_data))
         print('\nTEST LABEL DATASET PERMUTED size: ' ,np.shape(test_trgt))
         
@@ -180,18 +165,7 @@ def train_model(config, START_TIME, net_depth, SALIENCY, DILATION, restore_dir, 
         
        
         # Train network
-        if config.interim_vis:
-            os.mkdir(saving_dir+'interim_results/')
-            epochs = 0
-            epochs_num = int(config.num_epochs/5.0)
-            for i in range(epochs_num):
-                epochs = int(epochs+5)
-                my_network.train(train_data, train_trgt, valid_data, valid_trgt, epochs, config.batch_size, [reduce_lr,  test_callback, tensorboard])
-                my_network.save_img_results(saving_dir+'interim_results/', test_data, original_test_trgt, epochs)
-                my_network.save_img_results(saving_dir+'interim_results/val_', valid_data, original_valid_trgt, epochs)
-
-        else:        
-            my_network.train(train_data, train_trgt, valid_data, valid_trgt, config.num_epochs, config.batch_size, [reduce_lr,  test_callback, tensorboard])
+        my_network.train(train_data, train_trgt, config.num_epochs, config.batch_size, [reduce_lr,  test_callback, tensorboard])
         
         ## Save Results
         elapsed_times_all[b_id] = timer() - one_timer
