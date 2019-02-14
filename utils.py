@@ -106,8 +106,6 @@ def set_parser(parser):
     parser.add_argument('--fold', type=int, default=1)
     parser.add_argument('--random_num', type=int, default=500)
     parser.add_argument('--img_size', type=int, default=64)
-    parser.add_argument('--batch_norm', dest='batch_norm', action='store_true', default=True)
-    parser.add_argument('--no_batch_norm', dest='batch_norm',action='store_false')
     parser.add_argument('--dir_name', type=str, default='')
     parser.add_argument('--gpu_device', type=str, required=True,
                         help='Available GPU number')

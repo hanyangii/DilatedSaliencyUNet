@@ -61,7 +61,7 @@ if __name__ == '__main__':
     
     ''' Train Networks'''
     train_config = TrainConfig(args)
-    '''
+    
     # U-Net (only FLAIR)
     test_model(train_config,test_data[0], test_trgt, net_depth=3, SALIENCY=False, DILATION=False, 
                 restore_dir=restore_weights_path+'UNet_depth3_FLAIR_20190116-0142_UNet_depth3_new_basic_ep80_0/train_models.h5', net_type='UNet_depth3_FLAIR',label_list=label_list, affine_list = affine_list)
@@ -80,14 +80,16 @@ if __name__ == '__main__':
     test_dat = np.concatenate(test_data[0:2], axis=3)   
     test_model(train_config,test_dat, test_trgt, net_depth=3, SALIENCY=False, DILATION=False, 
                 restore_dir=restore_weights_path+'F+I_20190116-0254_UNet_depth3_new_basic_ep80_0/train_models.h5', net_type='F+I', label_list=label_list, affine_list = affine_list)
-    '''
+    
     # Saliency U-Net (FLAIR+IAM)
     K.clear_session()
     sess = tf.Session(config=config)
     K.set_session(sess)
     test_model(train_config,test_data[0:2], test_trgt, net_depth=args.depth, SALIENCY=True, DILATION=False, 
                 restore_dir='results/F+I_depth1_20190212-0725_Saliency_UNet_ep2_0/train_models.h5', net_type='F+I', label_list=label_list, affine_list = affine_list)
-    '''
+    
+    # Dilated Saliency U-Net (FLAIR+IAM)
+    # Dilation factor - 1242
     K.clear_session()
     sess = tf.Session(config=config)
     K.set_session(sess)
@@ -95,31 +97,6 @@ if __name__ == '__main__':
                 restore_dir=restore_weights_path+'F+I_1242_20190117-0109_Dilated_Saliency_UNet_ep80_0/train_models.h5', net_type='F+I', label_list=label_list, affine_list = affine_list, dilation_factor = [[1,2],[4,2]])
     
     
-    # U-Net (FLAIR + IAM + T1w)
-    K.clear_session()
-    sess = tf.Session(config=config)
-    K.set_session(sess)
-    test_dat = np.concatenate(test_data, axis=-1)  
-    test_model(train_config,test_dat, test_trgt, net_depth=3, SALIENCY=False, DILATION=False, 
-                restore_dir=restore_weights_path+'All_20181220-1123_UNet_depth3_ep80_0/train_models.h5', net_type='All', label_list=label_list)
-    
-    
-    # Saliency U-Net (FLAIR+IAM+T1w)
-    K.clear_session()
-    sess = tf.Session(config=config)
-    K.set_session(sess)
-    test_model(train_config,test_data, test_trgt, net_depth=3, SALIENCY=True, DILATION=False, 
-                restore_dir=None, net_type='All', label_list=label_list)
-     
-    
-    # Dilated Saliency U-Net (FLAIR + IAM + T1w)
-    K.clear_session()
-    sess = tf.Session(config=config)
-    K.set_session(sess)
-    test_model(train_config,test_data, test_trgt, net_depth=3, SALIENCY=True, DILATION=True, 
-                restore_dir=restore_weights_path+'All_20181220-1123_Dilated_Saliency_UNet_ep80_0/train_models.h5', net_type='All', label_list=label_list)
-    
-    '''
     # Clear memory
     train_trgt = None
     test_trgt  = None
